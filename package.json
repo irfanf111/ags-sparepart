@@ -1,0 +1,77 @@
+{
+  "name": "sparepart-app",
+  "private": true,
+  "version": "8.6.2",
+  "type": "module",
+  "main": "main.cjs",
+  "build": {
+    "appId": "com.ags.sparepart",
+    "productName": "AGS Techflow",
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "irfanfadila",
+        "repo": "sparepart-app"
+      }
+    ],
+    "directories": {
+      "output": "dist-electron"
+    },
+    "asar": true,
+    "asarUnpack": [
+      "**/node_modules/sql.js/**/*"
+    ],
+    "win": {
+      "target": [
+        "nsis",
+        "portable"
+      ],
+      "icon": "public/logo.png"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "AGS Techflow",
+      "deleteAppDataOnUninstall": false,
+      "allowElevation": true
+    },
+    "files": [
+      "dist/**/*",
+      "main.cjs",
+      "preload.cjs"
+    ]
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "electron": "wait-on tcp:5173 && cross-env NODE_ENV=development electron .",
+    "start": "concurrently \"npm run dev\" \"npm run electron\"",
+    "build:win": "vite build && electron-builder --win",
+    "build:linux": "vite build && electron-builder --linux"
+  },
+  "dependencies": {
+    "electron-store": "^11.0.2",
+    "electron-updater": "^6.8.3",
+    "lucide-react": "^0.441.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "recharts": "^2.12.7",
+    "sql.js": "^1.14.1"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.5",
+    "@types/react-dom": "^18.3.0",
+    "@vitejs/plugin-react": "^4.3.1",
+    "autoprefixer": "^10.4.20",
+    "concurrently": "^9.2.1",
+    "electron": "^40.0.0",
+    "electron-builder": "^26.8.1",
+    "postcss": "^8.4.45",
+    "tailwindcss": "^3.4.11",
+    "vite": "^5.4.2",
+    "wait-on": "^9.0.10"
+  }
+}
