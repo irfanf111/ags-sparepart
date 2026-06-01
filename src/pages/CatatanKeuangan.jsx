@@ -11,6 +11,25 @@ export default function CatatanKeuangan({ keuangan = [], services = [], onRefres
   const [showModal, setShowModal] = useState(false);
   const [loading, setLoading] = useState(false);
   
+  // Hidden / Deleted financial transaction IDs
+  const [hiddenIds, setHiddenIds] = useState(() => {
+    try {
+      const saved = localStorage.getItem('ags_hidden_keuangan_ids');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  // Selected IDs for bulk actions
+  const [selectedIds, setSelectedIds] = useState(new Set());
+
+  const hideTransactionIds = (ids) => {
+    const updated = [...new Set([...hiddenIds, ...ids])];
+    setHiddenIds(updated);
+    localStorage.setItem('ags_hidden_keuangan_ids', JSON.stringify(updated));
+  };
+
   // New transaction state
   const [newTrans, setNewTrans] = useState({
     tipe: 'Pengeluaran',
@@ -37,8 +56,10 @@ export default function CatatanKeuangan({ keuangan = [], services = [], onRefres
         };
       })
       .filter(item => item.jumlah > 0);
-    return [...keuangan, ...validServices];
-  }, [keuangan, services]);
+    
+    const hiddenSet = new Set(hiddenIds);
+    return [...keuangan, ...validServices].filter(k => !hiddenSet.has(k.id));
+  }, [keuangan, services, hiddenIds]);
 
   // Filters search
   const filteredData = useMemo(() => {
@@ -143,13 +164,68 @@ export default function CatatanKeuangan({ keuangan = [], services = [], onRefres
     }
   };
 
-  const handleDelete = async (id, desc) => {
+  const handleToggleSelect = (id) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  };
+
+  const handleToggleSelectAll = (filteredItems) => {
+    setSelectedIds(prev => {
+      const allSelected = filteredItems.length > 0 && filteredItems.every(item => prev.has(item.id));
+      if (allSelected) {
+        const next = new Set(prev);
+        filteredItems.forEach(item => next.delete(item.id));
+        return next;
+      } else {
+        const next = new Set(prev);
+        filteredItems.forEach(item => next.add(item.id));
+        return next;
+      }
+    });
+  };
+
+  const handleDeleteSingle = async (id, isManual, desc) => {
     if (confirm(`Hapus catatan keuangan "${desc}"?`)) {
+      if (isManual) {
+        try {
+          await deleteKeuanganItem(id);
+        } catch (err) {
+          console.error("Gagal menghapus entri manual dari database:", err);
+        }
+      }
+      hideTransactionIds([id]);
+      setSelectedIds(prev => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
+      if (onRefresh) await onRefresh();
+    }
+  };
+
+  const handleDeleteSelected = async () => {
+    if (selectedIds.size === 0) return;
+    if (confirm(`Hapus ${selectedIds.size} catatan keuangan terpilih?`)) {
       try {
-        await deleteKeuanganItem(id);
+        const idsArray = Array.from(selectedIds);
+        for (const id of idsArray) {
+          const isManual = id.toString().startsWith('keu-man-');
+          if (isManual) {
+            await deleteKeuanganItem(id);
+          }
+        }
+        hideTransactionIds(idsArray);
+        setSelectedIds(new Set());
         if (onRefresh) await onRefresh();
       } catch (err) {
-        alert('Gagal menghapus: ' + err.message);
+        alert('Gagal menghapus beberapa item: ' + err.message);
       }
     }
   };
@@ -291,18 +367,29 @@ export default function CatatanKeuangan({ keuangan = [], services = [], onRefres
 
       {/* Main Table Card */}
       <div className="card p-5 space-y-4">
-        {/* Search */}
-        <div className="relative max-w-sm">
-          <span className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
-            <Search size={16} />
-          </span>
-          <input 
-            type="text" 
-            placeholder="Cari deskripsi, tipe, kode..." 
-            className="input-field pl-9"
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-          />
+        {/* Search & Actions Toolbar */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="relative max-w-sm flex-1">
+            <span className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+              <Search size={16} />
+            </span>
+            <input 
+              type="text" 
+              placeholder="Cari deskripsi, tipe, kode..." 
+              className="input-field pl-9"
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+            />
+          </div>
+
+          {selectedIds.size > 0 && (
+            <button
+              onClick={handleDeleteSelected}
+              className="px-4 py-2 bg-red-500/10 hover:bg-red-500/20 text-red-600 border border-red-500/20 rounded-xl text-xs font-bold flex items-center gap-1.5 transition active:scale-95 cursor-pointer"
+            >
+              <Trash2 size={13} /> Hapus Terpilih ({selectedIds.size})
+            </button>
+          )}
         </div>
 
         {/* Table */}
@@ -310,6 +397,14 @@ export default function CatatanKeuangan({ keuangan = [], services = [], onRefres
           <table className="w-full text-sm text-left">
             <thead className="bg-slate-50 text-slate-500 border-b border-slate-200">
               <tr>
+                <th className="px-4 py-3 text-center w-12">
+                  <input 
+                    type="checkbox" 
+                    className="rounded border-slate-300 text-orange-500 focus:ring-orange-500 h-4 w-4 cursor-pointer"
+                    checked={filteredData.length > 0 && filteredData.every(item => selectedIds.has(item.id))}
+                    onChange={() => handleToggleSelectAll(filteredData)}
+                  />
+                </th>
                 <th className="px-4 py-3 font-semibold">Tanggal</th>
                 <th className="px-4 py-3 font-semibold">Tipe</th>
                 <th className="px-4 py-3 font-semibold">Kode Nota</th>
@@ -321,7 +416,7 @@ export default function CatatanKeuangan({ keuangan = [], services = [], onRefres
             <tbody className="divide-y divide-slate-100">
               {filteredData.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="text-center py-10 text-slate-500">
+                  <td colSpan={7} className="text-center py-10 text-slate-500">
                     Belum ada riwayat transaksi keuangan pada filter ini.
                   </td>
                 </tr>
@@ -329,7 +424,19 @@ export default function CatatanKeuangan({ keuangan = [], services = [], onRefres
                 filteredData.map(k => {
                   const isManual = k.id.toString().startsWith('keu-man-');
                   return (
-                    <tr key={k.id} className="hover:bg-slate-50/50 transition">
+                    <tr 
+                      key={k.id} 
+                      onClick={() => handleToggleSelect(k.id)}
+                      className={`hover:bg-slate-50/50 transition cursor-pointer ${selectedIds.has(k.id) ? 'bg-orange-50/35' : ''}`}
+                    >
+                      <td className="px-4 py-3 text-center" onClick={e => e.stopPropagation()}>
+                        <input 
+                          type="checkbox" 
+                          className="rounded border-slate-300 text-orange-500 focus:ring-orange-500 h-4 w-4 cursor-pointer"
+                          checked={selectedIds.has(k.id)}
+                          onChange={() => handleToggleSelect(k.id)}
+                        />
+                      </td>
                       <td className="px-4 py-3 text-slate-600 whitespace-nowrap">{formatTanggalSingkat(k.tanggal)}</td>
                       <td className="px-4 py-3">
                         {k.tipe === 'Pemasukan' ? (
@@ -348,19 +455,20 @@ export default function CatatanKeuangan({ keuangan = [], services = [], onRefres
                         ${k.tipe === 'Pemasukan' ? 'text-emerald-600' : 'text-red-500'}`}>
                         {k.tipe === 'Pemasukan' ? '+' : '-'} {formatRupiah(k.jumlah)}
                       </td>
-                      <td className="px-4 py-3">
-                        <div className="flex justify-center">
-                          {isManual ? (
-                            <button 
-                              onClick={() => handleDelete(k.id, k.deskripsi)} 
-                              className="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded transition"
-                              title="Hapus manual entry"
-                            >
-                              <Trash2 size={15} />
-                            </button>
-                          ) : (
-                            <span className="text-[10px] text-slate-400 italic">Sistem</span>
+                      <td className="px-4 py-3" onClick={e => e.stopPropagation()}>
+                        <div className="flex justify-center items-center gap-2">
+                          {!isManual && (
+                            <span className="text-[9px] text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded font-bold uppercase tracking-wider">
+                              Sistem
+                            </span>
                           )}
+                          <button 
+                            onClick={() => handleDeleteSingle(k.id, isManual, k.deskripsi)} 
+                            className="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded transition cursor-pointer"
+                            title="Hapus catatan"
+                          >
+                            <Trash2 size={15} />
+                          </button>
                         </div>
                       </td>
                     </tr>

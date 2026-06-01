@@ -228,6 +228,12 @@ Menggantikan sistem data supplier konvensional, modul [DataSupplier.jsx](file://
 * **WhatsApp B2B Customizer Modal**: Menggantikan tautan WhatsApp langsung yang kaku dengan modal interaktif baru. Admin dapat memilih topik pesan secara dinamis (Tanya Stok, Koordinasi Servis, Info Update, SLA, Catatan Tambahan, atau Sapaan Umum). Catatan Tambahan (`kontrak`) akan disematkan secara dinamis di akhir pesan jika diaktifkan. Disediakan pula Live Preview & Text Editor agar admin dapat menyesuaikan pesan secara bebas sebelum dikirim ke WhatsApp.
 * **Blinking Pulse Badge**: Mitra dengan status aktif ditandai lampu indikator hijau yang berdenyut (*pulsing anim*) untuk kemudahan monitoring visual.
 
+### E. Sistem Penghapusan & Seleksi Massal Jurnal Keuangan
+Pada halaman [CatatanKeuangan.jsx](file:///home/irfanfadila/sparepart-app/src/pages/CatatanKeuangan.jsx), kami merancang fitur untuk menghapus log transaksi keuangan (pemasukan & pengeluaran) baik yang dibuat secara manual maupun otomatis oleh sistem (jasa servis).
+* **Penyimpanan Blacklist (Daftar ID Tersembunyi)**: Untuk menjaga keutuhan data relasional SQLite dan menghindari penghapusan destruktif pada tabel database lain (seperti data unit servis yang aktif), ID transaksi yang dihapus akan disimpan ke dalam array `ags_hidden_keuangan_ids` pada `localStorage`. Transaksi dengan ID dalam daftar ini akan langsung difilter keluar dari perhitungan omset, laba rugi bersih, rekap berkala, dan tampilan tabel secara instan.
+* **Hapus Massal (Bulk Delete)**: Ditambahkan fitur kotak centang (*checkbox*) di sisi kiri setiap baris tabel. Pengguna dapat memilih satu per satu atau memilih seluruh transaksi pada halaman tersebut melalui checkbox header. Tombol **"Hapus Terpilih"** akan muncul secara interaktif di sisi kanan toolbar pencarian untuk menghapus semua entri terpilih dalam satu klik konfirmasi.
+* **Integrasi Penghapusan Manual SQLite**: Ketika menghapus entri bertipe manual (`isManual` / diawali `keu-man-`), selain disembunyikan secara visual, sistem juga secara otomatis menghapusnya secara permanen dari database SQLite lokal melalui handler `deleteKeuanganItem(id)`.
+
 ---
 
 ## 5. Panduan Praktis Developer: Menambahkan/Mengubah Fitur (Tahun Depan)
