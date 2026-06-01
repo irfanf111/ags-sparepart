@@ -10,6 +10,7 @@ export default function CetakNotaKosong({ onClose }) {
     nama_bengkel: 'PT AGS WIJAYA DHANESWARA',
     alamat_bengkel: 'Desa Kunirejo Kulon, RT.002/RW.001, Kecamatan Butuh, Kabupaten Purworejo, Jawa Tengah',
     no_hp_bengkel: '083863333322',
+    pesan_kaki_nota: 'Garansi Berlaku 30 hari setelah barang diambil & dgn masalah yg sama. Brg yg tersimpan & blm diambil dlm 2 bulan (60 hr), kami lepas tgg. jwb'
   });
   const [blankTerms, setBlankTerms] = useState([
     'Barang yang Sudah dibeli tidak dapat ditukar atau dikembalikan',
@@ -25,6 +26,7 @@ export default function CetakNotaKosong({ onClose }) {
           nama_bengkel: settingsData.nama_bengkel || 'PT AGS WIJAYA DHANESWARA',
           alamat_bengkel: settingsData.alamat_bengkel || 'Desa Kunirejo Kulon, RT.002/RW.001, Kecamatan Butuh, Kabupaten Purworejo, Jawa Tengah',
           no_hp_bengkel: settingsData.no_hp_bengkel || '083863333322',
+          pesan_kaki_nota: settingsData.pesan_kaki_nota || 'Garansi Berlaku 30 hari setelah barang diambil & dgn masalah yg sama. Brg yg tersimpan & blm diambil dlm 2 bulan (60 hr), kami lepas tgg. jwb'
         });
       }
     });
@@ -51,113 +53,137 @@ export default function CetakNotaKosong({ onClose }) {
   // Render: Nota A4 Kosong
   // =========================================================
   const renderA4Card = () => (
-    <div 
-      className="print-area-blank bg-white shadow-xl p-8 relative flex flex-col mx-auto"
+    <div
+      className="nota-card relative flex flex-col px-5 pt-3 pb-3"
       style={{ 
-        width: '210mm', 
-        minHeight: '145mm', 
+        minHeight: '13.8cm', 
+        height: 'auto', 
+        fontFamily: 'Arial, sans-serif', 
+        fontSize: '12px', 
+        lineHeight: '1.45', 
         color: '#000', 
-        fontFamily: 'Arial, sans-serif',
-        fontSize: '12px',
-        lineHeight: '1.4',
         background: '#fdfbf7' 
       }}
     >
-      {/* Kop Nota / Header */}
-      <div className="flex justify-between items-start mb-2">
-        <div className="flex items-center gap-4">
-          <img 
-            src="logo.png" 
-            alt="Logo" 
-            className="w-[84px] h-[84px] object-contain flex-shrink-0" 
-          />
-          <div>
-            <h2 
-              className="font-extrabold text-xl tracking-wide uppercase leading-none"
-              style={{ color: '#e02266' }}
-            >
-              {profile.nama_bengkel}
-            </h2>
-            <p className="text-sm font-semibold text-slate-800 mt-1">{profile.alamat_bengkel}</p>
-            <p className="text-sm font-semibold text-slate-800">HP. {profile.no_hp_bengkel}</p>
-          </div>
+      {/* Watermark Logo */}
+      <div
+        className="watermark-container"
+        style={{
+          position: 'absolute',
+          top: '38%',
+          left: '50%',
+          transform: 'translate(-50%, -50%)',
+          pointerEvents: 'none',
+          userSelect: 'none',
+          zIndex: 0,
+          opacity: 0.04,
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: '6px'
+        }}
+      >
+        <img 
+          src="logo.png" 
+          alt="Watermark Logo" 
+          style={{ 
+            width: '180px', 
+            height: '180px', 
+            objectFit: 'contain',
+            filter: 'grayscale(100%)',
+            marginBottom: '4px'
+          }} 
+        />
+        <div style={{ fontSize: '4.5rem', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.12em', border: '3px dashed #000', borderRadius: '1rem', padding: '6px 24px', whiteSpace: 'nowrap', color: '#000' }}>
+          {profile.nama_singkat}
         </div>
+      </div>
+
+      {/* Konten Nota */}
+      <div className="relative flex flex-col w-full" style={{ zIndex: 1, height: '100%' }}>
         
-        {/* Right Header: Tanggal Transaksi */}
-        <div className="text-right pt-2 font-bold text-sm">
-          <span>Tanggal Transaksi : ___________________</span>
-        </div>
-      </div>
-
-      {/* Divider Line */}
-      <div className="border-t-[3px] border-black mb-3"></div>
-
-      {/* Customer Line */}
-      <div className="font-bold text-sm mb-4">
-        <span>Kepada : ___________________________</span>
-      </div>
-
-      {/* Table structure */}
-      <div className="flex-1 mb-4">
-        <table style={{ width: '100%', borderCollapse: 'collapse', border: '2px solid #000' }}>
-          <thead>
-            <tr style={{ borderBottom: '2px solid #000' }}>
-              <th style={{ width: '40px', padding: '6px', borderRight: '2px solid #000', backgroundColor: '#d6d6fb', color: '#000', fontWeight: 'bold', textTransform: 'uppercase', textAlign: 'center' }}>No</th>
-              <th style={{ padding: '6px', borderRight: '2px solid #000', backgroundColor: '#d6d6fb', color: '#000', fontWeight: 'bold', textTransform: 'uppercase', textAlign: 'left' }}>Deskripsi Barang</th>
-              <th style={{ width: '60px', padding: '6px', borderRight: '2px solid #000', backgroundColor: '#d6d6fb', color: '#000', fontWeight: 'bold', textTransform: 'uppercase', textAlign: 'center' }}>Qty</th>
-              <th style={{ width: '150px', padding: '6px', borderRight: '2px solid #000', backgroundColor: '#d6d6fb', color: '#000', fontWeight: 'bold', textTransform: 'uppercase', textAlign: 'center' }}>HARGA</th>
-              <th style={{ width: '180px', padding: '6px', backgroundColor: '#d6d6fb', color: '#000', fontWeight: 'bold', textTransform: 'uppercase', textAlign: 'center' }}>TOTAL</th>
-            </tr>
-          </thead>
-          <tbody>
-            {[1, 2, 3, 4, 5].map((idx) => (
-              <tr key={idx} style={{ height: '48px', borderBottom: '2px solid #000' }}>
-                <td style={{ borderRight: '2px solid #000' }} className="text-center"></td>
-                <td style={{ borderRight: '2px solid #000' }}></td>
-                <td style={{ borderRight: '2px solid #000' }} className="text-center"></td>
-                <td style={{ borderRight: '2px solid #000' }}></td>
-                <td></td>
-              </tr>
-            ))}
-            <tr style={{ height: '36px', fontWeight: 'bold' }}>
-              <td colSpan={4} style={{ borderRight: '2px solid #000', padding: '6px 12px' }} className="text-left font-bold text-sm">
-                Jumlah Keseluruhan
-              </td>
-              <td style={{ padding: '6px 12px' }} className="text-left font-bold text-sm">
-                Rp.
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-
-      {/* Footer Section */}
-      <div className="flex justify-between items-start mt-4">
-        {/* Left Notes */}
-        <div className="w-[60%] text-left">
-          <div className="flex items-center gap-2 mb-1">
-            <span className="font-bold text-sm text-slate-800">Keterangan :</span>
-            <button 
-              onClick={handleOpenEditTerms}
-              className="text-blue-600 hover:text-blue-800 hover:underline font-bold text-xs no-print"
-            >
-              Edit Keterangan
-            </button>
+        {/* Header / Kop */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '4px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <img src="logo.png" alt="Logo AGS" style={{ width: '84px', height: '84px', objectFit: 'contain', flexShrink: 0 }} />
+            <div>
+              <div style={{ fontWeight: 900, fontSize: '18px', color: '#dc2626', textTransform: 'uppercase', letterSpacing: '0.05em', lineHeight: 1 }}>{profile.nama_singkat}</div>
+              <div style={{ fontSize: '11px', fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.08em' }}>{profile.nama_bengkel}</div>
+              <div style={{ fontSize: '11px', color: '#374151' }}>{profile.alamat_bengkel}</div>
+              <div style={{ fontSize: '11px', color: '#374151' }}>HP. {profile.no_hp_bengkel}</div>
+            </div>
           </div>
-          <ol className="list-decimal pl-4 space-y-1 text-sm font-semibold text-slate-800">
-            {blankTerms.map((term, i) => (
-              <li key={i}>{term}</li>
-            ))}
-          </ol>
+          <div style={{ fontSize: '11px', color: '#000', fontWeight: 'bold', textAlign: 'right', marginTop: '8px' }}>
+            Tanggal Transaksi : ___________________
+          </div>
         </div>
 
-        {/* Right Signature */}
-        <div className="w-[30%] text-right flex flex-col items-center">
-          <span className="text-sm font-semibold text-slate-800 mb-12">Hormat Kami</span>
-          <span className="font-extrabold text-sm text-slate-800 uppercase tracking-wide border-b-2 border-black pb-0.5">
-            AGUS SUNARTO
-          </span>
+        <div style={{ borderTop: '2px solid #000', marginBottom: '1px' }}></div>
+        <div style={{ borderTop: '4px solid #000' }}></div>
+
+        {/* Customer Line */}
+        <div style={{ fontSize: '12px', fontWeight: 'bold', margin: '8px 0 10px 0' }}>
+          Kepada : ___________________________
         </div>
+
+        {/* Tabel Barang */}
+        <div style={{ minHeight: '220px', flex: 1 }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px', border: '1.5px solid #000' }}>
+            <thead>
+              <tr style={{ borderBottom: '1.5px solid #000' }}>
+                <th style={{ width: '35px', padding: '4px 6px', borderRight: '1px solid #000', backgroundColor: '#ccccff', color: '#000', fontWeight: 'bold', textAlign: 'center' }}>No</th>
+                <th style={{ padding: '4px 6px', borderRight: '1px solid #000', backgroundColor: '#ccccff', color: '#000', fontWeight: 'bold', textAlign: 'left' }}>Deskripsi Barang</th>
+                <th style={{ width: '50px', padding: '4px 6px', borderRight: '1px solid #000', backgroundColor: '#ccccff', color: '#000', fontWeight: 'bold', textAlign: 'center' }}>Qty</th>
+                <th style={{ width: '110px', padding: '4px 6px', borderRight: '1px solid #000', backgroundColor: '#ccccff', color: '#000', fontWeight: 'bold', textAlign: 'center' }}>HARGA</th>
+                <th style={{ width: '140px', padding: '4px 6px', backgroundColor: '#ccccff', color: '#000', fontWeight: 'bold', textAlign: 'center' }}>TOTAL</th>
+              </tr>
+            </thead>
+            <tbody>
+              {[1, 2, 3, 4, 5].map((idx) => (
+                <tr key={idx} style={{ height: '36px', borderBottom: '1px solid #000' }}>
+                  <td style={{ borderRight: '1px solid #000', padding: '4px' }} className="text-center"></td>
+                  <td style={{ borderRight: '1px solid #000', padding: '4px' }}></td>
+                  <td style={{ borderRight: '1px solid #000', padding: '4px' }} className="text-center"></td>
+                  <td style={{ borderRight: '1px solid #000', padding: '4px' }}></td>
+                  <td style={{ padding: '4px' }}></td>
+                </tr>
+              ))}
+              <tr style={{ height: '28px', fontWeight: 'bold' }}>
+                <td colSpan={4} style={{ borderRight: '1px solid #000', padding: '4px 6px', borderTop: '1.5px solid #000' }} className="text-left">
+                  Jumlah Keseluruhan
+                </td>
+                <td style={{ padding: '4px 6px', borderTop: '1.5px solid #000' }} className="text-left">
+                  Rp.
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        {/* Footer & Signature */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginTop: '16px' }}>
+          <div style={{ width: '60%', marginTop: '20px' }}>
+            <div style={{ fontWeight: 700, fontSize: '10px', marginBottom: '2px' }}>
+              Keterangan: <button onClick={handleOpenEditTerms} className="text-blue-600 font-bold no-print hover:underline" style={{ border: 'none', background: 'none', cursor: 'pointer' }}>Edit Keterangan</button>
+            </div>
+            <div style={{ fontSize: '9px', lineHeight: 1.4, color: '#1f2937' }}>
+              <ol style={{ listStyleType: 'decimal', paddingLeft: '14px', margin: 0 }}>
+                {blankTerms.map((term, i) => (
+                  <li key={i}>{term}</li>
+                ))}
+              </ol>
+            </div>
+          </div>
+          <div style={{ width: '40%', display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
+            <div style={{ textAlign: 'center', width: '120px', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+              <div style={{ fontSize: '11px' }}>Hormat Kami,</div>
+              <div style={{ height: '70px', width: '100%' }}></div>
+              <div style={{ fontWeight: 700, fontSize: '11px', textTransform: 'uppercase', textDecoration: 'underline' }}>AGUS SUNARTO</div>
+            </div>
+          </div>
+        </div>
+
       </div>
     </div>
   );
@@ -165,20 +191,17 @@ export default function CetakNotaKosong({ onClose }) {
   // =========================================================
   // Render: Nota Thermal (Mini Printer) Kosong
   // =========================================================
-  const renderThermalCard = () => (
-    <div 
-      className="print-area-blank bg-white text-black p-4 shadow-xl mx-auto w-[58mm] text-[10px] font-sans pb-8" 
-      style={{ lineHeight: '1.4' }}
-    >
+  const renderThermalContent = () => (
+    <>
       <div className="text-center mb-2">
-        <p className="font-black text-xs uppercase text-rose-600">{profile.nama_singkat}</p>
-        <p className="text-[8px] font-bold text-gray-600 uppercase border-b border-dashed border-gray-300 pb-1 mb-1 inline-block">{profile.nama_bengkel}</p>
-        <p className="text-[8px] mt-1">{profile.alamat_bengkel}</p>
-        <p className="text-[8px]">HP. {profile.no_hp_bengkel}</p>
+        <p className="font-black text-base uppercase text-red-600">{profile.nama_singkat}</p>
+        <p className="text-[10px] font-bold text-gray-600 uppercase border-b border-dashed border-gray-300 pb-1 mb-1 inline-block">{profile.nama_bengkel}</p>
+        <p className="text-[10px] mt-1">{profile.alamat_bengkel}</p>
+        <p className="text-[10px]">HP. {profile.no_hp_bengkel}</p>
       </div>
 
       <div className="border-b border-black my-2"></div>
-      <div className="text-center font-bold text-[11px]">NOTA KOSONG</div>
+      <div className="text-center font-bold">NOTA KOSONG</div>
       <div className="border-b border-black my-2"></div>
 
       <div className="flex flex-col gap-1 mb-2 font-semibold">
@@ -213,13 +236,13 @@ export default function CetakNotaKosong({ onClose }) {
         </tbody>
       </table>
 
-      <div className="mt-2 text-[8px] font-semibold">
-        <div className="flex items-center gap-1">
+      <div className="mt-2 text-[10px] font-medium">
+        <div className="flex items-center gap-1 font-bold">
           <span>Keterangan:</span>
           <button 
             onClick={handleOpenEditTerms} 
             className="text-blue-600 font-bold no-print hover:underline"
-            style={{ fontSize: '8px' }}
+            style={{ fontSize: '9px' }}
           >
             (Edit)
           </button>
@@ -232,12 +255,12 @@ export default function CetakNotaKosong({ onClose }) {
       </div>
 
       <div className="mt-4 flex flex-col items-end">
-        <span className="text-[8px] mb-8 mr-4">Hormat Kami</span>
-        <span className="font-bold text-[8px] uppercase border-b border-black pb-0.5 mr-2">
+        <span className="text-[10px] mb-8 mr-4">Hormat Kami</span>
+        <span className="font-bold text-[10px] uppercase border-b border-black pb-0.5 mr-2">
           AGUS SUNARTO
         </span>
       </div>
-    </div>
+    </>
   );
 
   return (
@@ -249,11 +272,11 @@ export default function CetakNotaKosong({ onClose }) {
           Preview Nota Belanja (Nota Kosong)
         </h2>
         <div className="flex flex-wrap gap-2">
+          <button onClick={() => handlePrint('Thermal')} className="bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded-lg text-xs font-medium flex items-center gap-2 transition">
+            <Printer size={14} /> Mini Printer
+          </button>
           <button onClick={() => handlePrint('A4')} className="btn-primary text-xs">
             <Printer size={14} /> Cetak A4
-          </button>
-          <button onClick={() => handlePrint('Thermal')} className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg text-xs font-medium flex items-center gap-2 transition">
-            <Printer size={14} /> Mini Printer
           </button>
           {onClose && (
             <button onClick={onClose} className="btn-danger text-xs ml-4">
@@ -264,8 +287,23 @@ export default function CetakNotaKosong({ onClose }) {
       </div>
 
       {/* Area Print */}
-      <div className="flex-1 p-8 flex justify-center items-start bg-slate-100 overflow-y-auto">
-        {printMode === 'A4' ? renderA4Card() : renderThermalCard()}
+      <div className="flex-1 pt-0 px-4 pb-4 flex justify-center items-start bg-slate-100 overflow-y-auto">
+        {/* ===== FORMAT A4 ===== */}
+        {printMode === 'A4' && (
+          <div
+            className="bg-white shadow-2xl print-area print-area-a4 border border-gray-200"
+            style={{ width: '210mm' }}
+          >
+            {renderA4Card()}
+          </div>
+        )}
+
+        {/* ===== FORMAT THERMAL (58mm) ===== */}
+        {printMode === 'Thermal' && (
+          <div className="bg-white text-black p-4 shadow-2xl print-area w-[58mm] text-xs font-sans pb-10" style={{ lineHeight: '1.4' }}>
+            {renderThermalContent()}
+          </div>
+        )}
       </div>
 
       {/* Sub-modal: Edit Terms / Catatan Kaki */}
@@ -318,22 +356,18 @@ export default function CetakNotaKosong({ onClose }) {
             animation: none !important;
             perspective: none !important;
             filter: none !important;
-            background: white !important;
           }
           body { zoom: 100% !important; }
           body * { visibility: hidden; }
           .print-container { position: absolute !important; left: 0 !important; top: 0 !important; width: 100% !important; margin: 0 !important; padding: 0 !important; }
-          .print-area-blank, .print-area-blank * { visibility: visible; }
-          .print-area-blank {
-            position: absolute !important;
-            left: 0 !important;
-            top: 0 !important;
-            width: ${printMode === 'Thermal' ? '58mm' : '100%'} !important;
-            max-width: ${printMode === 'Thermal' ? '58mm' : '100%'} !important;
-            margin: 0 !important;
-            padding: 0 !important;
-            box-shadow: none !important;
-            border: none !important;
+          .print-area, .print-area * { visibility: visible; }
+          .print-area { position: relative !important; margin: 0 !important; box-shadow: none !important; border: none !important; width: ${printMode === 'Thermal' ? '58mm' : '100%'} !important; max-width: ${printMode === 'Thermal' ? '58mm' : '100%'} !important; }
+          .print-area-a4 { width: 100% !important; height: auto !important; border: none !important; box-shadow: none !important; }
+          .nota-card {
+            padding-top: 14px !important;
+            overflow: hidden !important;
+            page-break-inside: avoid !important;
+            break-inside: avoid !important;
           }
           .no-print { display: none !important; }
           @page { size: ${printMode === 'Thermal' ? '58mm auto' : 'A4 portrait'}; margin: 0 !important; }
