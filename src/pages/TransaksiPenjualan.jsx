@@ -3,6 +3,7 @@ import { ShoppingCart, Search, Printer, X, User, AlertCircle, CheckCircle2, Info
 import { formatRupiah, generateNomorNota } from '../utils/helpers';
 import { KATEGORI_OPTIONS, getCustomers, getSettings } from '../utils/storage';
 import NotaKontan from '../components/NotaKontan';
+import CetakNotaKosong from './CetakNotaKosong';
 
 export default function TransaksiPenjualan({ parts, notas, onRefresh }) {
   const [search, setSearch] = useState('');
@@ -23,31 +24,9 @@ export default function TransaksiPenjualan({ parts, notas, onRefresh }) {
   const [detailPart, setDetailPart] = useState(null);
 
   const [showBlankModal, setShowBlankModal] = useState(false);
-  const [showEditTermsModal, setShowEditTermsModal] = useState(false);
-  const [profile, setProfile] = useState({
-    nama_singkat: 'AGS NOTEBOOK',
-    nama_bengkel: 'PT AGS WIJAYA DHANESWARA',
-    alamat_bengkel: 'Desa Kunirejo Kulon, RT.002/RW.001, Kecamatan Butuh, Kabupaten Purworejo, Jawa Tengah',
-    no_hp_bengkel: '083863333322',
-  });
-  const [blankTerms, setBlankTerms] = useState([
-    'Barang yang Sudah dibeli tidak dapat ditukar atau dikembalikan',
-    'Terima kasih atas kunjungan anda'
-  ]);
-  const [tempTermsText, setTempTermsText] = useState('');
 
   useEffect(() => {
     getCustomers().then(setCustomers);
-    getSettings().then(settingsData => {
-      if (settingsData) {
-        setProfile({
-          nama_singkat: settingsData.nama_singkat || 'AGS NOTEBOOK',
-          nama_bengkel: settingsData.nama_bengkel || 'PT AGS WIJAYA DHANESWARA',
-          alamat_bengkel: settingsData.alamat_bengkel || 'Desa Kunirejo Kulon, RT.002/RW.001, Kecamatan Butuh, Kabupaten Purworejo, Jawa Tengah',
-          no_hp_bengkel: settingsData.no_hp_bengkel || '083863333322',
-        });
-      }
-    });
   }, []);
 
   const showToast = (msg, type = 'success') => {
@@ -133,25 +112,7 @@ export default function TransaksiPenjualan({ parts, notas, onRefresh }) {
     
     setShowCustomerModal(false);
     setShowNota(true);
-  };
-
-  const handlePrintBlank = () => {
-    setTimeout(() => { window.print(); }, 200);
-  };
-
-  const handleOpenEditTerms = (e) => {
-    e.preventDefault();
-    setTempTermsText(blankTerms.join('\n'));
-    setShowEditTermsModal(true);
-  };
-
-  const handleSaveTerms = () => {
-    const lines = tempTermsText.split('\n').map(l => l.trim()).filter(l => l.length > 0);
-    setBlankTerms(lines);
-    setShowEditTermsModal(false);
-  };
-
-  const handleNotaComplete = () => {
+  };  const handleNotaComplete = () => {
     setShowNota(false);
     setCart([]);
     setTransaksiData(null);
@@ -437,227 +398,8 @@ export default function TransaksiPenjualan({ parts, notas, onRefresh }) {
         </div>
       )}
 
-      {/* Modal Cetak Nota Kosong */}
       {showBlankModal && (
-        <div className="modal-overlay z-50 overflow-y-auto flex items-center justify-center p-4">
-          <div className="bg-slate-100 rounded-2xl shadow-2xl w-full max-w-[850px] flex flex-col overflow-hidden animate-fade-in-up" onClick={e => e.stopPropagation()}>
-            
-            {/* Title Bar like a OS window */}
-            <div className="bg-slate-250 px-5 py-3 flex justify-between items-center border-b border-slate-300 bg-slate-200 no-print">
-              <div className="flex items-center gap-2 text-slate-700 font-semibold text-sm">
-                <ShoppingCart size={16} className="text-slate-500" />
-                <span>Nota Belanja</span>
-              </div>
-              <button 
-                onClick={() => setShowBlankModal(false)}
-                className="text-slate-500 hover:text-slate-800 transition"
-              >
-                <X size={18} />
-              </button>
-            </div>
-
-            {/* Main Receipt Sheet Container */}
-            <div className="p-8 flex justify-center bg-slate-400/20 overflow-y-auto max-h-[75vh]">
-              
-              {/* The physical print area card */}
-              <div 
-                className="print-area-blank bg-white shadow-lg p-8 relative flex flex-col"
-                style={{ 
-                  width: '210mm', 
-                  minHeight: '145mm', 
-                  color: '#000', 
-                  fontFamily: 'Arial, sans-serif',
-                  fontSize: '12px',
-                  lineHeight: '1.4'
-                }}
-              >
-                {/* Kop Nota / Header */}
-                <div className="flex justify-between items-start mb-2">
-                  <div className="flex items-center gap-4">
-                    <img 
-                      src="logo.png" 
-                      alt="Logo" 
-                      className="w-[84px] h-[84px] object-contain flex-shrink-0" 
-                    />
-                    <div>
-                      {/* Bold Pink/Magenta Title */}
-                      <h2 
-                        className="font-extrabold text-xl tracking-wide uppercase leading-none"
-                        style={{ color: '#e02266' }}
-                      >
-                        {profile.nama_bengkel}
-                      </h2>
-                      <p className="text-sm font-semibold text-slate-800 mt-1">{profile.alamat_bengkel}</p>
-                      <p className="text-sm font-semibold text-slate-800">HP. {profile.no_hp_bengkel}</p>
-                    </div>
-                  </div>
-                  
-                  {/* Right Header: Tanggal Transaksi */}
-                  <div className="text-right pt-2 font-bold text-sm">
-                    <span>Tanggal Transaksi : ___________________</span>
-                  </div>
-                </div>
-
-                {/* Divider Line */}
-                <div className="border-t-[3px] border-black mb-3"></div>
-
-                {/* Customer Line */}
-                <div className="font-bold text-sm mb-4">
-                  <span>Kepada : ___________________________</span>
-                </div>
-
-                {/* Table structure */}
-                <div className="flex-1 mb-4">
-                  <table style={{ width: '100%', borderCollapse: 'collapse', border: '2px solid #000' }}>
-                    <thead>
-                      <tr style={{ borderBottom: '2px solid #000' }}>
-                        <th style={{ width: '40px', padding: '6px', borderRight: '2px solid #000', backgroundColor: '#d6d6fb', color: '#000', fontWeight: 'bold', textTransform: 'uppercase', textAlign: 'center' }}>No</th>
-                        <th style={{ padding: '6px', borderRight: '2px solid #000', backgroundColor: '#d6d6fb', color: '#000', fontWeight: 'bold', textTransform: 'uppercase', textAlign: 'left' }}>Deskripsi Barang</th>
-                        <th style={{ width: '60px', padding: '6px', borderRight: '2px solid #000', backgroundColor: '#d6d6fb', color: '#000', fontWeight: 'bold', textTransform: 'uppercase', textAlign: 'center' }}>Qty</th>
-                        <th style={{ width: '150px', padding: '6px', borderRight: '2px solid #000', backgroundColor: '#d6d6fb', color: '#000', fontWeight: 'bold', textTransform: 'uppercase', textAlign: 'center' }}>HARGA</th>
-                        <th style={{ width: '180px', padding: '6px', backgroundColor: '#d6d6fb', color: '#000', fontWeight: 'bold', textTransform: 'uppercase', textAlign: 'center' }}>TOTAL</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {/* Render 5 empty rows */}
-                      {[1, 2, 3, 4, 5].map((idx) => (
-                        <tr key={idx} style={{ height: '48px', borderBottom: '2px solid #000' }}>
-                          <td style={{ borderRight: '2px solid #000' }} className="text-center"></td>
-                          <td style={{ borderRight: '2px solid #000' }}></td>
-                          <td style={{ borderRight: '2px solid #000' }} className="text-center"></td>
-                          <td style={{ borderRight: '2px solid #000' }}></td>
-                          <td></td>
-                        </tr>
-                      ))}
-                      {/* Total / Jumlah Keseluruhan Row */}
-                      <tr style={{ height: '36px', fontWeight: 'bold' }}>
-                        <td colSpan={4} style={{ borderRight: '2px solid #000', padding: '6px 12px' }} className="text-left font-bold text-sm">
-                          Jumlah Keseluruhan
-                        </td>
-                        <td style={{ padding: '6px 12px' }} className="text-left font-bold text-sm">
-                          Rp.
-                        </td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
-
-                {/* Footer Section */}
-                <div className="flex justify-between items-start mt-4">
-                  {/* Left Notes */}
-                  <div className="w-[60%] text-left">
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="font-bold text-sm text-slate-800">Keterangan :</span>
-                      <button 
-                        onClick={handleOpenEditTerms}
-                        className="text-blue-600 hover:text-blue-800 hover:underline font-bold text-xs no-print"
-                      >
-                        Edit Keterangan
-                      </button>
-                    </div>
-                    <ol className="list-decimal pl-4 space-y-1 text-sm font-semibold text-slate-800">
-                      {blankTerms.map((term, i) => (
-                        <li key={i}>{term}</li>
-                      ))}
-                    </ol>
-                  </div>
-
-                  {/* Right Signature */}
-                  <div className="w-[30%] text-right flex flex-col items-center">
-                    <span className="text-sm font-semibold text-slate-800 mb-12">Hormat Kami</span>
-                    <span className="font-extrabold text-sm text-slate-800 uppercase tracking-wide border-b-2 border-black pb-0.5">
-                      AGUS SUNARTO
-                    </span>
-                  </div>
-                </div>
-
-              </div>
-
-            </div>
-
-            {/* Print trigger button footer */}
-            <div className="bg-slate-200 p-4 border-t border-slate-300 flex justify-center no-print">
-              <button 
-                onClick={handlePrintBlank}
-                className="w-full max-w-[200px] bg-emerald-500 hover:bg-emerald-600 border border-emerald-600 text-white py-3 rounded-lg font-bold flex items-center justify-center gap-2 transition shadow-lg hover:shadow-emerald-950/20 active:scale-95"
-                style={{ fontSize: '15px' }}
-              >
-                <Printer size={18} />
-                Cetak
-              </button>
-            </div>
-
-          </div>
-
-          {/* Styles block injected for print layout override */}
-          <style dangerouslySetInnerHTML={{__html: `
-            @media print {
-              html, body, #root {
-                margin: 0 !important;
-                padding: 0 !important;
-                background: white !important;
-                -webkit-print-color-adjust: exact !important;
-                print-color-adjust: exact !important;
-              }
-              body * { visibility: hidden; }
-              .print-area-blank, .print-area-blank * { visibility: visible; }
-              .print-area-blank {
-                position: absolute !important;
-                left: 0 !important;
-                top: 0 !important;
-                width: 100% !important;
-                height: 100% !important;
-                margin: 0 !important;
-                padding: 0 !important;
-                box-shadow: none !important;
-                border: none !important;
-              }
-              .no-print { display: none !important; }
-              @page { size: A4 portrait; margin: 1.5cm !important; }
-            }
-          `}} />
-
-        </div>
-      )}
-
-      {/* Sub-modal: Edit Terms / Catatan Kaki */}
-      {showEditTermsModal && (
-        <div className="modal-overlay z-[70] flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-fade-in-up" onClick={e => e.stopPropagation()}>
-            <div className="modal-header bg-slate-50 border-b border-slate-200 px-5 py-4 flex justify-between items-center">
-              <h3 className="font-bold text-slate-800 text-base">Edit Syarat &amp; Ketentuan</h3>
-              <button 
-                onClick={() => setShowEditTermsModal(false)}
-                className="text-slate-400 hover:text-slate-600"
-              >
-                <X size={18} />
-              </button>
-            </div>
-            <div className="p-5">
-              <p className="text-xs text-slate-500 mb-2">Tuliskan syarat &amp; ketentuan. Gunakan baris baru (Enter) untuk poin berikutnya.</p>
-              <textarea
-                className="w-full h-32 input-field font-sans text-sm p-3 border border-slate-300 rounded-xl focus:border-orange-500 focus:ring-1 focus:ring-orange-500"
-                value={tempTermsText}
-                onChange={e => setTempTermsText(e.target.value)}
-                placeholder="Masukkan keterangan nota..."
-              />
-            </div>
-            <div className="px-5 py-4 bg-slate-50 border-t border-slate-200 flex justify-end gap-2">
-              <button 
-                onClick={() => setShowEditTermsModal(false)}
-                className="px-4 py-2 border border-slate-200 hover:bg-slate-100 text-slate-600 rounded-xl text-xs font-semibold"
-              >
-                Batal
-              </button>
-              <button 
-                onClick={handleSaveTerms}
-                className="px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-xl text-xs font-bold"
-              >
-                Simpan
-              </button>
-            </div>
-          </div>
-        </div>
+        <CetakNotaKosong onClose={() => setShowBlankModal(false)} />
       )}
     </div>
   );

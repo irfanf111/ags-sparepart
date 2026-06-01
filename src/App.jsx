@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import {
   Package, ShoppingCart, BarChart2, BookOpen,
   Users, Menu, X, Wrench, ChevronRight, Bell, PlusCircle, ClipboardList, Home, Settings,
-  ZoomIn, ZoomOut, Calculator
+  ZoomIn, ZoomOut, Calculator, Printer
 } from 'lucide-react';
 import KalkulatorMarkup from './components/KalkulatorMarkup';
 import { initializeData, getParts, getNotas, getSuppliers, getKeuangan, getServices } from './utils/storage';
@@ -17,6 +17,7 @@ import DataServisan from './pages/DataServisan';
 import InputServisan from './pages/InputServisan';
 import Pengaturan from './pages/Pengaturan';
 import BukuHutang from './pages/BukuHutang';
+import CetakNotaKosong from './pages/CetakNotaKosong';
 
 const NAV_ITEMS = [
   { id: 'dashboard', label: 'Dashboard', icon: Home, bgClass: 'bg-[#00f7b0] hover:bg-[#00d89a]', textClass: 'text-black' },
@@ -28,6 +29,7 @@ const NAV_ITEMS = [
   { id: 'supplier', label: 'Mitra & Kerjasama', icon: Users, bgClass: 'bg-orange-500 hover:bg-orange-600', textClass: 'text-black' },
   { id: 'keuangan', label: 'Catatan Keuangan', icon: BookOpen, bgClass: 'bg-[#00f7b0] hover:bg-[#00d89a]', textClass: 'text-black' },
   { id: 'buku_hutang', label: 'Buku Hutang / Cicilan', icon: BookOpen, bgClass: 'bg-[#00f7b0] hover:bg-[#00d89a]', textClass: 'text-black' },
+  { id: 'nota_kosong', label: 'Cetak Nota Kosong', icon: Printer, bgClass: 'bg-[#00f7b0] hover:bg-[#00d89a]', textClass: 'text-black' },
   { id: 'pengaturan', label: 'Pengaturan Toko', icon: Settings, bgClass: 'bg-slate-700 hover:bg-slate-600', textClass: 'text-white' },
 ];
 
@@ -116,6 +118,7 @@ export default function App() {
       case 'keuangan': return <CatatanKeuangan keuangan={keuangan} services={services} onRefresh={refreshData} />;
       case 'buku_hutang': return <BukuHutang onRefresh={refreshData} />;
       case 'supplier': return <DataSupplier suppliers={suppliers} onRefresh={refreshData} />;
+      case 'nota_kosong': return <CetakNotaKosong onClose={() => navigate('transaksi')} />;
       case 'pengaturan': return <Pengaturan onRefresh={refreshData} />;
       default: return <Dashboard spareparts={parts} notas={notas} services={services} />;
     }
