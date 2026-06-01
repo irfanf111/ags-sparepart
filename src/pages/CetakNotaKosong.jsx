@@ -133,7 +133,7 @@ export default function CetakNotaKosong({ onClose }) {
             <thead>
               <tr style={{ borderBottom: '1.5px solid #000' }}>
                 <th style={{ width: '35px', padding: '4px 6px', borderRight: '1px solid #000', backgroundColor: '#ccccff', color: '#000', fontWeight: 'bold', textAlign: 'center' }}>No</th>
-                <th style={{ padding: '4px 6px', borderRight: '1px solid #000', backgroundColor: '#ccccff', color: '#000', fontWeight: 'bold', textAlign: 'left' }}>Deskripsi Barang</th>
+                <th style={{ padding: '4px 6px', borderRight: '1px solid #000', backgroundColor: '#ccccff', color: '#000', fontWeight: 'bold', textAlign: 'center' }}>Deskripsi Barang</th>
                 <th style={{ width: '50px', padding: '4px 6px', borderRight: '1px solid #000', backgroundColor: '#ccccff', color: '#000', fontWeight: 'bold', textAlign: 'center' }}>Qty</th>
                 <th style={{ width: '110px', padding: '4px 6px', borderRight: '1px solid #000', backgroundColor: '#ccccff', color: '#000', fontWeight: 'bold', textAlign: 'center' }}>HARGA</th>
                 <th style={{ width: '140px', padding: '4px 6px', backgroundColor: '#ccccff', color: '#000', fontWeight: 'bold', textAlign: 'center' }}>TOTAL</th>

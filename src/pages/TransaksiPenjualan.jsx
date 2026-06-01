@@ -1,9 +1,8 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { ShoppingCart, Search, Printer, X, User, AlertCircle, CheckCircle2, Info, Tag, Package } from 'lucide-react';
 import { formatRupiah, generateNomorNota } from '../utils/helpers';
-import { KATEGORI_OPTIONS, getCustomers, getSettings } from '../utils/storage';
+import { KATEGORI_OPTIONS, getCustomers } from '../utils/storage';
 import NotaKontan from '../components/NotaKontan';
-import CetakNotaKosong from './CetakNotaKosong';
 
 export default function TransaksiPenjualan({ parts, notas, onRefresh }) {
   const [search, setSearch] = useState('');
@@ -22,9 +21,6 @@ export default function TransaksiPenjualan({ parts, notas, onRefresh }) {
   const [toast, setToast] = useState(null);
   const [customers, setCustomers] = useState([]);
   const [detailPart, setDetailPart] = useState(null);
-
-  const [showBlankModal, setShowBlankModal] = useState(false);
-
   useEffect(() => {
     getCustomers().then(setCustomers);
   }, []);
@@ -133,17 +129,9 @@ export default function TransaksiPenjualan({ parts, notas, onRefresh }) {
         </div>
       )}
 
-      <div className="flex justify-between items-center mb-4">
-        <div className="flex items-center gap-2">
-          <ShoppingCart className="text-orange-400" size={24} />
-          <h1 className="text-xl font-bold text-slate-800">Kasir Penjualan</h1>
-        </div>
-        <button 
-          onClick={() => setShowBlankModal(true)}
-          className="px-4 py-2 bg-orange-100 hover:bg-orange-200 text-orange-700 rounded-xl font-semibold flex items-center gap-2 transition"
-        >
-          <Printer size={16} /> Cetak Nota Kosong
-        </button>
+      <div className="flex items-center gap-2 mb-4">
+        <ShoppingCart className="text-orange-400" size={24} />
+        <h1 className="text-xl font-bold text-slate-800">Kasir Penjualan</h1>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 flex-1 min-h-0">
@@ -398,9 +386,6 @@ export default function TransaksiPenjualan({ parts, notas, onRefresh }) {
         </div>
       )}
 
-      {showBlankModal && (
-        <CetakNotaKosong onClose={() => setShowBlankModal(false)} />
-      )}
     </div>
   );
 }
