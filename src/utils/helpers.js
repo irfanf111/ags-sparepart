@@ -138,4 +138,4 @@ export const truncate = (str, n = 30) => {
 };
 
 // Versi Aplikasi AGS Techflow (Pusat Kendali Versi)
-export const APP_VERSION = '1.0.0';
+export const APP_VERSION = '1.0.1';

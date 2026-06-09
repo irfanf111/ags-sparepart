@@ -96,7 +96,7 @@ export default function Pengaturan({ onRefresh }) {
           isCustomMarkup: localStorage.getItem('ags_is_custom_markup'),
           hiddenKeuanganIds: JSON.parse(localStorage.getItem('ags_hidden_keuangan_ids') || '[]'),
           zoomLevel: localStorage.getItem('ags_zoom_level'),
-          backupVersion: APP_VERSION || '1.0.0',
+          backupVersion: APP_VERSION || '1.0.1',
           backupTime: new Date().toISOString()
         };
         const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(backupData, null, 2));
