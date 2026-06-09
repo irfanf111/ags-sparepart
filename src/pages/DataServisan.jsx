@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { Search, Filter, Printer, Save, CheckCircle2, AlertCircle, RefreshCw, Trash2, Smartphone, PenTool, Calendar, Calculator } from 'lucide-react';
-import { getServices, updateService, deleteService } from '../utils/storage';
+import { getServices, updateService, deleteService, removePartFromService } from '../utils/storage';
 import { formatRupiah, formatTanggalSingkat, getTodayStr } from '../utils/helpers';
 import NotaServicePrint from '../components/NotaServicePrint';
 import CustomSelect from '../components/CustomSelect';
@@ -55,7 +55,19 @@ export default function DataServisan({ onRefresh }) {
 
   const handleUpdatePanel = (field, value) => {
     if (!panelData) return;
-    setPanelData(prev => ({ ...prev, [field]: value }));
+    setPanelData(prev => {
+      const next = { ...prev, [field]: value };
+      if (field === 'statusPengerjaan') {
+        if (value === 'Sudah Diambil') {
+          if (!next.tanggalAmbil) {
+            next.tanggalAmbil = getTodayStr();
+          }
+        } else {
+          next.tanggalAmbil = '';
+        }
+      }
+      return next;
+    });
   };
 
   const handleSavePanel = async () => {
@@ -326,7 +338,32 @@ Terima Kasih.`;
               </div>
 
               {/* Body Panel */}
-              <div className="flex-1 overflow-y-auto px-5 pt-5 pb-36 space-y-6">
+              {(() => {
+                const partsList = panelData?.items ? (typeof panelData.items === 'string' ? JSON.parse(panelData.items) : panelData.items) : [];
+                const totalParts = partsList.reduce((sum, item) => sum + (item.subtotal || 0), 0);
+                const jasaServisVal = panelData ? Math.max(0, (panelData.biaya || 0) - totalParts) : 0;
+
+                const handleUpdateJasaServis = (val) => {
+                  const nextBiaya = Number(val) + totalParts;
+                  handleUpdatePanel('biaya', nextBiaya);
+                  handleUpdatePanel('jasaPasang', 0);
+                };
+
+                const handleRemovePart = async (partId) => {
+                  if (!panelData) return;
+                  if (confirm('Hapus sparepart ini dari data servisan dan kembalikan stoknya?')) {
+                    try {
+                      await removePartFromService(panelData.id, partId);
+                      showToast('Sparepart dihapus & stok dikembalikan!');
+                      await refreshLocal();
+                    } catch (err) {
+                      alert('Gagal menghapus sparepart: ' + err.message);
+                    }
+                  }
+                };
+
+                return (
+                  <div className="flex-1 overflow-y-auto px-5 pt-5 pb-36 space-y-6">
                 
                 {/* Info Masalah */}
                 <div className="space-y-1">
@@ -418,7 +455,12 @@ Terima Kasih.`;
                           <span className="text-slate-500 text-xs block mb-1">Tanggal Masuk</span>
                           <span className="text-slate-700 flex items-center gap-1 font-medium"><Calendar size={12}/> {formatTanggalSingkat(selectedService.tanggalMasuk)}</span>
                         </div>
-                        <div></div>
+                        {selectedService.statusPengerjaan === 'Sudah Diambil' && selectedService.tanggalAmbil && (
+                          <div>
+                            <span className="text-slate-500 text-xs block mb-1">Tanggal Diambil</span>
+                            <span className="text-slate-700 flex items-center gap-1 font-medium text-emerald-600"><Calendar size={12}/> {formatTanggalSingkat(selectedService.tanggalAmbil)}</span>
+                          </div>
+                        )}
                       </div>
                       <div className="border-t border-slate-100 pt-3">
                         <span className="text-slate-500 text-xs block mb-1">Keluhan / Masalah Bawaan</span>
@@ -446,6 +488,18 @@ Terima Kasih.`;
                     />
                   </div>
 
+                  {panelData.statusPengerjaan === 'Sudah Diambil' && (
+                    <div className="animate-scale-up">
+                      <label className="text-sm text-slate-700 font-medium mb-1.5 block">Tanggal Diambil (Penyerahan)</label>
+                      <input 
+                        type="date" 
+                        className="input-field w-full py-2.5 bg-white border-slate-300 focus:border-orange-500 text-slate-800" 
+                        value={panelData.tanggalAmbil || getTodayStr()}
+                        onChange={e => handleUpdatePanel('tanggalAmbil', e.target.value)}
+                      />
+                    </div>
+                  )}
+
                   <div>
                     <label className="text-sm text-slate-700 font-medium mb-1.5 block">Catatan Teknisi (Part Diganti/Kerusakan)</label>
                     <textarea 
@@ -455,9 +509,55 @@ Terima Kasih.`;
                     />
                   </div>
 
+                  {/* Spareparts List */}
+                  {partsList.length > 0 && (
+                    <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200 space-y-2">
+                      <label className="text-xs text-slate-500 font-bold block uppercase">Sparepart Terpasang</label>
+                      <div className="space-y-1.5 max-h-40 overflow-y-auto pr-1">
+                        {partsList.map((item, idx) => (
+                          <div key={idx} className="flex justify-between items-center bg-white p-2 rounded-lg border border-slate-100 text-xs shadow-sm">
+                            <div className="flex-1 min-w-0 pr-2">
+                              <p className="font-bold text-slate-800 truncate">{item.deskripsi}</p>
+                              <p className="text-slate-400 text-[10px] font-mono">{item.qty} x {formatRupiah(item.harga)}</p>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <span className="font-bold text-emerald-600">{formatRupiah(item.subtotal)}</span>
+                              <button 
+                                type="button"
+                                onClick={() => handleRemovePart(item.partId)}
+                                className="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded transition-colors"
+                                title="Hapus part & kembalikan stok"
+                              >
+                                <Trash2 size={13} />
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="flex justify-between items-center text-xs font-semibold text-slate-600 pt-1 border-t border-slate-100">
+                        <span>Total Suku Cadang:</span>
+                        <span className="text-slate-800 font-bold">{formatRupiah(totalParts)}</span>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Cost breakdown inputs */}
+                  <div>
+                    <label className="text-xs text-slate-500 font-bold block uppercase mb-1">Jasa Servis / Perbaikan (Rp)</label>
+                    <input 
+                      type="text" 
+                      className="input-field w-full py-2 bg-white border-slate-300 focus:border-orange-500 text-sm font-semibold"
+                      value={jasaServisVal ? jasaServisVal.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".") : ''}
+                      onChange={e => {
+                        const val = e.target.value.replace(/\D/g, '');
+                        handleUpdateJasaServis(Number(val));
+                      }}
+                    />
+                  </div>
+
                   <div>
                     <div className="flex justify-between items-center mb-1.5">
-                      <label className="text-sm text-slate-700 font-medium block">Total Biaya / Harga (Rp)</label>
+                      <label className="text-sm text-slate-700 font-medium block">Total Biaya Akhir (Rp)</label>
                       <button 
                         type="button" 
                         onClick={() => setIsKalkulatorOpen(true)}
@@ -470,15 +570,12 @@ Terima Kasih.`;
                       <span className="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-slate-500">Rp</span>
                       <input 
                         type="text" 
-                        className="input-field w-full pl-12 py-2.5 text-lg font-bold bg-white border-slate-300 focus:border-emerald-500 text-emerald-600" 
-                        value={panelData.biaya ? panelData.biaya.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".") : ''}
-                        onChange={e => {
-                          const val = e.target.value.replace(/\D/g, '');
-                          handleUpdatePanel('biaya', Number(val));
-                        }}
+                        readOnly
+                        className="input-field w-full pl-12 py-2.5 text-lg font-black bg-slate-50 border-slate-200 text-emerald-600 cursor-not-allowed" 
+                        value={panelData.biaya ? panelData.biaya.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".") : '0'}
                       />
                     </div>
-                    <p className="text-[10px] text-slate-500 mt-1.5">*Nominal biaya akan ditampilkan otomatis pada saat mencetak nota akhir.</p>
+                    <p className="text-[10px] text-slate-500 mt-1.5">*Total biaya otomatis dihitung dari: Jasa Servis + Total Suku Cadang.</p>
                   </div>
 
                   {(panelData.biaya > 0 || panelData.statusPengerjaan === 'Berhasil Dikerjakan' || panelData.statusPengerjaan === 'Sudah Diambil') && (
@@ -523,6 +620,8 @@ Terima Kasih.`;
                 </div>
 
               </div>
+                );
+              })()}
 
               {/* Action Buttons */}
               <div className="p-4 bg-slate-50 border-t border-slate-200 grid grid-cols-2 gap-3 shadow-[0_-10px_20px_rgba(0,0,0,0.05)]">

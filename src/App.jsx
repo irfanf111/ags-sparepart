@@ -5,7 +5,7 @@ import {
   ZoomIn, ZoomOut, Calculator, Printer
 } from 'lucide-react';
 import KalkulatorMarkup from './components/KalkulatorMarkup';
-import { initializeData, getParts, getNotas, getSuppliers, getKeuangan, getServices } from './utils/storage';
+import { initializeData, getParts, getNotas, getSuppliers, getKeuangan, getServices, saveSetting } from './utils/storage';
 import { getTodayStr, APP_VERSION } from './utils/helpers';
 import Dashboard from './pages/Dashboard';
 import DatabasePart from './pages/DatabasePart';
@@ -58,6 +58,7 @@ export default function App() {
       document.body.style.zoom = zoomLevel;
     }
     localStorage.setItem('ags_zoom_level', zoomLevel.toString());
+    saveSetting('ags_zoom_level', zoomLevel.toString());
   }, [zoomLevel]);
 
   // Listener keyboard shortcut untuk zoom (Ctrl/Cmd + '+', '-', '0')
@@ -139,7 +140,7 @@ export default function App() {
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 flex items-center justify-center shrink-0">
               <img
-                src="logo.png"
+                src="logo_app.png"
                 alt="Logo AGS"
                 className="w-full h-full object-contain drop-shadow-[0_0_8px_rgba(34,197,94,0.6)]"
               />

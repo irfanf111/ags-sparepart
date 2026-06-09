@@ -122,7 +122,7 @@ export default function InputServisan({ onRefresh, navigate }) {
           <form onSubmit={handleSimpan} className="space-y-8">
             {/* Grid 2 Column */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {/* Baris 1: Nama Pemilik (Kiri) - Merek / Tipe / Serial Number (Kanan) */}
+              {/* Baris 1: Nama Pemilik (Kiri) - Jenis Barang (Kanan) */}
               <div>
                 <label className="text-xs font-bold text-gray-900 mb-1.5 block uppercase tracking-wider">Nama Pemilik *</label>
                 <input 
@@ -135,16 +135,16 @@ export default function InputServisan({ onRefresh, navigate }) {
                 />
               </div>
               <div>
-                <label className="text-xs font-bold text-gray-900 mb-1.5 block uppercase tracking-wider">Merek / Tipe</label>
-                <input 
-                  type="text" 
-                  className="input-field w-full py-2.5" 
-                  value={form.merek} 
-                  onChange={e => handleChange('merek', e.target.value)} 
+                <label className="text-xs font-bold text-gray-900 mb-1.5 block uppercase tracking-wider">Jenis Barang</label>
+                <CustomSelect 
+                  className="select-field w-full py-2.5" 
+                  value={form.jenis} 
+                  options={JENIS_SERVICE_OPTIONS}
+                  onChange={val => handleChange('jenis', val)}
                 />
               </div>
 
-              {/* Baris 2: Nomor Handphone (Kiri) - Keluhan / Masalah (Kanan) */}
+              {/* Baris 2: Nomor Handphone (Kiri) - Merek / Tipe (Kanan) */}
               <div>
                 <label className="text-xs font-bold text-gray-900 mb-1.5 block uppercase tracking-wider">Nomor Handphone</label>
                 <input 
@@ -155,25 +155,24 @@ export default function InputServisan({ onRefresh, navigate }) {
                 />
               </div>
               <div>
+                <label className="text-xs font-bold text-gray-900 mb-1.5 block uppercase tracking-wider">Merek / Tipe</label>
+                <input 
+                  type="text" 
+                  className="input-field w-full py-2.5" 
+                  value={form.merek} 
+                  onChange={e => handleChange('merek', e.target.value)} 
+                />
+              </div>
+
+              {/* Baris 3: Keluhan / Masalah (Lebar Penuh) */}
+              <div className="md:col-span-2">
                 <label className="text-xs font-bold text-gray-900 mb-1.5 block uppercase tracking-wider">Keluhan / Masalah</label>
                 <textarea 
-                  className="input-field w-full resize-none h-[46px]" 
+                  className="input-field w-full resize-none h-[60px]" 
                   value={form.keluhan} 
                   onChange={e => handleChange('keluhan', e.target.value)} 
                 />
               </div>
-
-              {/* Baris 3: Jenis Barang (Kiri) - (kosong) */}
-              <div>
-                <label className="text-xs font-bold text-gray-900 mb-1.5 block uppercase tracking-wider">Jenis Barang</label>
-                <CustomSelect 
-                  className="select-field w-full py-2.5" 
-                  value={form.jenis} 
-                  options={JENIS_SERVICE_OPTIONS}
-                  onChange={val => handleChange('jenis', val)}
-                />
-              </div>
-              <div></div> {/* Kolom Kanan Kosong */}
             </div>
 
             {/* Kelengkapan Section */}

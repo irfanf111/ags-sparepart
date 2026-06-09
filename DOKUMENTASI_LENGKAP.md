@@ -388,7 +388,7 @@ Untuk mengemas seluruh program menjadi installer Windows (.exe) mandiri mengguna
 npm run build:win
 ```
 *Proses ini akan mengompilasi aset web Vite terlebih dahulu, lalu membungkusnya bersama Node.js runtime dan SQLite WebAssembly.*
-* **Hasil Output**: Berkas installer executable akan disimpan di folder `/dist-electron/AGS Techflow Setup [versi].exe` (misalnya: `AGS Techflow Setup 8.6.2.exe`). File inilah yang didistribusikan kepada pengguna akhir.
+* **Hasil Output**: Berkas installer executable akan disimpan di folder `/dist-electron/AGS Techflow Setup [versi].exe` (misalnya: `AGS Techflow Setup 1.0.0.exe`). File inilah yang didistribusikan kepada pengguna akhir.
 
 ### D. Pengemasan Aplikasi Desktop Linux
 Jika aplikasi ingin dijalankan pada komputer klien berbasis sistem operasi Linux:

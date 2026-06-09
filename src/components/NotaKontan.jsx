@@ -1,4 +1,5 @@
 import React, { useRef, useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { X, Printer, Monitor } from 'lucide-react';
 import { formatRupiah, formatTanggal, getTimeStr, getTodayStr, generateNomorNota } from '../utils/helpers';
 import { addNota, getSettings } from '../utils/storage';
@@ -55,8 +56,8 @@ export default function NotaKontan({ data, onClose, onRefresh, existingNotas }) 
   // =========================================================
   const renderNotaCard = () => (
     <div
-      className="nota-card relative flex flex-col px-5 pt-3 pb-3"
-      style={{ minHeight: '13.8cm', height: 'auto', fontFamily: 'Arial, sans-serif', fontSize: '12px', lineHeight: '1.45', color: '#000', background: '#fdfbf7' }}
+      className="nota-card relative flex flex-col px-4 pt-2.5 pb-2.5"
+      style={{ minHeight: '13.5cm', height: 'auto', fontFamily: 'Arial, sans-serif', fontSize: '11px', lineHeight: '1.4', color: '#000', background: '#fdfbf7', boxSizing: 'border-box' }}
     >
       <div
         className="watermark-container"
@@ -77,7 +78,7 @@ export default function NotaKontan({ data, onClose, onRefresh, existingNotas }) 
         }}
       >
         <img 
-          src="logo.png" 
+          src="logo_app.png" 
           alt="Watermark Logo" 
           style={{ 
             width: '180px', 
@@ -87,113 +88,124 @@ export default function NotaKontan({ data, onClose, onRefresh, existingNotas }) 
             marginBottom: '4px'
           }} 
         />
-        <div style={{ fontSize: '4.5rem', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.12em', border: '3px dashed #000', borderRadius: '1rem', padding: '6px 24px', whiteSpace: 'nowrap', color: '#000' }}>
+        <div style={{ fontSize: '4.5rem', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.12em', whiteSpace: 'nowrap', color: '#000' }}>
           {profile.nama_singkat}
         </div>
       </div>
 
       {/* Konten Nota */}
-      <div className="relative flex flex-col w-full" style={{ zIndex: 1, height: '100%' }}>
-
-        {/* Header */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '4px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <img src="logo.png" alt="Logo" style={{ width: '84px', height: '84px', objectFit: 'contain', flexShrink: 0 }} />
-            <div>
-              <div style={{ fontWeight: 900, fontSize: '18px', color: '#dc2626', textTransform: 'uppercase', letterSpacing: '0.05em', lineHeight: 1 }}>{profile.nama_singkat}</div>
-              <div style={{ fontSize: '11px', fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.08em' }}>{profile.nama_bengkel}</div>
-              <div style={{ fontSize: '11px', color: '#374151' }}>{profile.alamat_bengkel}</div>
-              <div style={{ fontSize: '11px', color: '#374151' }}>HP. {profile.no_hp_bengkel}</div>
+      <div className="relative flex flex-col w-full justify-between" style={{ zIndex: 1, flexGrow: 1, height: '100%' }}>
+        <div className="flex flex-col w-full">
+          {/* Header */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '2px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <img src="logo_app.png" alt="Logo" style={{ width: '60px', height: '60px', objectFit: 'contain', flexShrink: 0 }} />
+              <div>
+                <div style={{ fontWeight: 900, fontSize: '15px', color: '#dc2626', textTransform: 'uppercase', letterSpacing: '0.05em', lineHeight: 1.1 }}>{profile.nama_singkat}</div>
+                <div style={{ fontSize: '10px', fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.08em' }}>{profile.nama_bengkel}</div>
+                <div style={{ fontSize: '10px', color: '#374151', lineHeight: 1.2 }}>{profile.alamat_bengkel}</div>
+                <div style={{ fontSize: '10px', color: '#374151', lineHeight: 1.2 }}>HP. {profile.no_hp_bengkel}</div>
+              </div>
+            </div>
+            <div style={{ fontSize: '10px', color: '#6b7280', textAlign: 'right', marginTop: '4px' }}>
+              Dicetak: {formatTanggal(nota.tanggal)} / {nota.waktu || '00:00'}
             </div>
           </div>
-          <div style={{ fontSize: '11px', color: '#6b7280', textAlign: 'right', marginTop: '8px' }}>
-            Dicetak: {formatTanggal(nota.tanggal)} / {nota.waktu || '00:00'}
+
+          <div style={{ borderTop: '1.5px solid #1f2937', marginTop: '6px', marginBottom: '4px' }}></div>
+          <div style={{ textAlign: 'center', fontWeight: 800, fontSize: '14px', textTransform: 'uppercase', letterSpacing: '0.15em', margin: '4px 0', color: '#111827' }}>
+            Nota Kontan
           </div>
-        </div>
+          <div style={{ borderTop: '1.5px solid #1f2937', marginTop: '4px', marginBottom: '6px' }}></div>
 
-        <div style={{ borderTop: '2px solid #000', marginBottom: '1px' }}></div>
-        <div style={{ borderTop: '4px solid #000' }}></div>
-        <div style={{ textAlign: 'center', fontWeight: 700, fontSize: '15px', textTransform: 'uppercase', letterSpacing: '0.05em', margin: '2px 0' }}>
-          Nota Kontan
-        </div>
-        <div style={{ borderTop: '1px solid #000', marginBottom: '2px' }}></div>
+          {/* Info Grid (2 Kolom) */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1.1fr 0.9fr', gap: '8px 24px', borderBottom: '1.5px solid #1f2937', padding: '6px 4px', fontSize: '11px', lineHeight: '1.3' }}>
+            {/* Kolom Kiri */}
+            <div style={{ display: 'grid', gridTemplateColumns: '95px 1fr', gap: '3px 8px', alignItems: 'start' }}>
+              <div style={{ color: '#4b5563', fontWeight: 600 }}>No. Nota</div>
+              <div style={{ color: '#111827', fontFamily: 'monospace', fontWeight: 700 }}>: {nota.nomorNota}</div>
+              
+              <div style={{ color: '#4b5563', fontWeight: 600 }}>Keterangan</div>
+              <div style={{ color: '#111827' }}>: {nota.keterangan || '-'}</div>
+            </div>
 
-        {/* Info Rows */}
-        <div style={{ borderBottom: '1px solid #d1d5db', display: 'flex', justifyContent: 'space-between', padding: '4px 6px', fontSize: '12px', lineHeight: '1.45' }}>
-          <div><span style={{ color: '#6b7280', fontWeight: 700, textTransform: 'uppercase' }}>No. Nota : </span><strong style={{ fontFamily: 'monospace' }}>{nota.nomorNota}</strong></div>
-          <div><span style={{ color: '#6b7280', fontWeight: 700, textTransform: 'uppercase' }}>Nama Pemilik : </span><strong>{nota.namaCustomer}</strong></div>
-        </div>
-        <div style={{ borderBottom: '2px solid #000', display: 'flex', justifyContent: 'space-between', padding: '4px 6px', fontSize: '12px', lineHeight: '1.45' }}>
-          <div><span style={{ color: '#6b7280', fontWeight: 700, textTransform: 'uppercase' }}>Keterangan : </span><strong>{nota.keterangan || '-'}</strong></div>
-          <div><span style={{ color: '#6b7280', fontWeight: 700, textTransform: 'uppercase' }}>Kasir / Admin : </span><strong>{nota.namaAdmin || 'AGUS SUNARTO'}</strong></div>
-        </div>
+            {/* Kolom Kanan */}
+            <div style={{ display: 'grid', gridTemplateColumns: '95px 1fr', gap: '3px 8px', alignItems: 'start' }}>
+              <div style={{ color: '#4b5563', fontWeight: 600 }}>Nama Pemilik</div>
+              <div style={{ color: '#111827', fontWeight: 700 }}>: {nota.namaCustomer}</div>
+              
+              <div style={{ color: '#4b5563', fontWeight: 600 }}>Kasir / Admin</div>
+              <div style={{ color: '#111827' }}>: {nota.namaAdmin || 'AGUS SUNARTO'}</div>
+            </div>
+          </div>
 
-        <div style={{ borderTop: '1px solid #000', margin: '3px 0' }}></div>
+          <div style={{ borderTop: '1px solid #e5e7eb', margin: '4px 0' }}></div>
 
-        {/* Tabel Barang */}
-        <div style={{ minHeight: '85px' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px', lineHeight: '1.45' }}>
-            <thead>
-              <tr style={{ borderBottom: '1.5px solid #000' }}>
-                <th style={{ textAlign: 'left', width: '25px', padding: '2px 0', fontWeight: 700 }}>No</th>
-                <th style={{ textAlign: 'left', padding: '2px 0', fontWeight: 700 }}>Deskripsi Barang</th>
-                <th style={{ textAlign: 'center', width: '40px', padding: '2px 0', fontWeight: 700 }}>Qty</th>
-                <th style={{ textAlign: 'right', width: '90px', padding: '2px 0', fontWeight: 700 }}>Harga</th>
-                <th style={{ textAlign: 'right', width: '100px', padding: '2px 0', fontWeight: 700 }}>Total</th>
-              </tr>
-            </thead>
-            <tbody>
-              {nota.items.map((item, i) => (
-                <tr key={i} style={{ borderBottom: '1px solid #e2e8f0' }}>
-                  <td style={{ padding: '3px 0' }}>{i + 1}</td>
-                  <td style={{ padding: '3px 0' }}>
-                    <div>{item.deskripsi}</div>
-                    {item.keterangan && <div style={{ fontSize: '10px', color: '#6b7280', fontStyle: 'italic' }}>({item.keterangan})</div>}
-                  </td>
-                  <td style={{ padding: '3px 0', textAlign: 'center' }}>{item.qty}</td>
-                  <td style={{ padding: '3px 0', textAlign: 'right' }}>{formatRupiah(item.harga)}</td>
-                  <td style={{ padding: '3px 0', textAlign: 'right' }}>{formatRupiah(item.subtotal)}</td>
+          {/* Tabel Barang */}
+          <div style={{ minHeight: '50px' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '10.5px', lineHeight: '1.3' }}>
+              <thead>
+                <tr style={{ borderBottom: '1.5px solid #1f2937', fontWeight: 700, color: '#374151' }}>
+                  <th style={{ textAlign: 'left', width: '25px', padding: '4px 0' }}>No</th>
+                  <th style={{ textAlign: 'left', padding: '4px 0' }}>Deskripsi Barang</th>
+                  <th style={{ textAlign: 'center', width: '40px', padding: '4px 0' }}>Qty</th>
+                  <th style={{ textAlign: 'right', width: '90px', padding: '4px 0' }}>Harga</th>
+                  <th style={{ textAlign: 'right', width: '100px', padding: '4px 0' }}>Total</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-
-        <div style={{ borderTop: '1.5px solid #000', marginTop: '8px', marginBottom: '8px' }}></div>
-
-        {/* Total */}
-        <div style={{ textAlign: 'right', fontWeight: 700, fontSize: '13px', marginBottom: '42px' }}>
-          Total Biaya : {formatRupiah(nota.total || 0)}
-        </div>
-
-        {/* Footer & Signature */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-          <div style={{ width: '60%', marginTop: '40px' }}>
-            <div style={{ fontWeight: 700, fontSize: '10px', marginBottom: '2px' }}>Syarat &amp; Ketentuan / Garansi :</div>
-            <div style={{ fontSize: '9px', lineHeight: 1.4, color: '#1f2937' }}>
-              {profile.pesan_kaki_nota.split('\n').map((line, i) => {
-                const trimmed = line.trim();
-                const isBullet = trimmed.startsWith('-') || trimmed.startsWith('*');
-                if (isBullet) {
-                  return (
-                    <div key={i} style={{ display: 'flex', gap: '4px' }}>
-                      <span style={{ flexShrink: 0, fontWeight: 700 }}>-</span>
-                      <span>{trimmed.replace(/^[-*]\s*/, '')}</span>
-                    </div>
-                  );
-                }
-                return <div key={i}>{line}</div>;
-              })}
-            </div>
-            <div style={{ fontSize: '8px', color: '#9ca3af', fontFamily: 'monospace', marginTop: '4px' }}>
-              🔒 AGS VERIFIED: {btoa(nota.nomorNota + '|' + nota.total).substring(0, 12).toUpperCase()}
-            </div>
+              </thead>
+              <tbody style={{ borderBottom: '1.5px solid #1f2937' }}>
+                {nota.items.map((item, i) => (
+                  <tr key={i} style={{ borderBottom: '1px solid #e5e7eb' }}>
+                    <td style={{ padding: '4.5px 0', color: '#1f2937' }}>{i + 1}</td>
+                    <td style={{ padding: '4.5px 0', color: '#1f2937' }}>
+                      <div>{item.deskripsi}</div>
+                      {item.keterangan && <div style={{ fontSize: '9px', color: '#6b7280', fontStyle: 'italic' }}>({item.keterangan})</div>}
+                    </td>
+                    <td style={{ padding: '4.5px 0', textAlign: 'center', color: '#1f2937' }}>{item.qty}</td>
+                    <td style={{ padding: '4.5px 0', textAlign: 'right', color: '#1f2937' }}>{formatRupiah(item.harga)}</td>
+                    <td style={{ padding: '4.5px 0', textAlign: 'right', color: '#1f2937' }}>{formatRupiah(item.subtotal)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
-          <div style={{ width: '40%', display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
-            <div style={{ textAlign: 'center', width: '120px', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-              <div style={{ fontSize: '11px' }}>Hormat Kami,</div>
-              <div style={{ height: '75px', width: '100%' }}></div>
-              <div style={{ fontWeight: 700, fontSize: '11px', textTransform: 'uppercase', textDecoration: 'underline' }}>AGUS SUNARTO</div>
+        </div>
+
+        <div className="w-full">
+          <div style={{ borderTop: '1px solid #e5e7eb', marginTop: '4px', marginBottom: '6px' }}></div>
+
+          {/* Total & Signature / Footer Container */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginTop: '10px' }}>
+            <div style={{ width: '60%' }}>
+              <div style={{ fontWeight: 700, fontSize: '9.5px', marginBottom: '2px' }}>Syarat &amp; Ketentuan / Garansi :</div>
+              <div style={{ fontSize: '8.5px', lineHeight: 1.3, color: '#1f2937' }}>
+                {profile.pesan_kaki_nota.split('\n').map((line, i) => {
+                  const trimmed = line.trim();
+                  const isBullet = trimmed.startsWith('-') || trimmed.startsWith('*');
+                  if (isBullet) {
+                    return (
+                      <div key={i} style={{ display: 'flex', gap: '4px' }}>
+                        <span style={{ flexShrink: 0, fontWeight: 700 }}>-</span>
+                        <span>{trimmed.replace(/^[-*]\s*/, '')}</span>
+                      </div>
+                    );
+                  }
+                  return <div key={i}>{line}</div>;
+                })}
+              </div>
+              <div style={{ fontSize: '8px', color: '#9ca3af', fontFamily: 'monospace', marginTop: '4px' }}>
+                🔒 AGS VERIFIED: {btoa(nota.nomorNota + '|' + nota.total).substring(0, 12).toUpperCase()}
+              </div>
+            </div>
+            <div style={{ width: '40%', display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
+              <div style={{ fontSize: '12px', fontWeight: 700, marginBottom: '10px', textAlign: 'right' }}>
+                Total Biaya : {formatRupiah(nota.total || 0)}
+              </div>
+              <div style={{ textAlign: 'center', width: '120px', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                <div style={{ fontSize: '10px' }}>Hormat Kami,</div>
+                <div style={{ height: '45px', width: '100%' }}></div>
+                <div style={{ fontWeight: 700, fontSize: '10px', textTransform: 'uppercase', textDecoration: 'underline' }}>AGUS SUNARTO</div>
+              </div>
             </div>
           </div>
         </div>
@@ -202,7 +214,7 @@ export default function NotaKontan({ data, onClose, onRefresh, existingNotas }) 
     </div>
   );
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 bg-slate-50 z-50 overflow-y-auto flex flex-col fade-in-up print-container">
       {/* Header Aksi */}
       <div className="bg-white border-b border-slate-200 p-4 flex flex-wrap justify-between items-center gap-4 no-print sticky top-0 z-10 shadow-sm">
@@ -321,6 +333,7 @@ export default function NotaKontan({ data, onClose, onRefresh, existingNotas }) 
           @page { size: ${mode === 'Thermal' ? '58mm auto' : 'A4 portrait'}; margin: 0 !important; }
         }
       `}} />
-    </div>
+    </div>,
+    document.body
   );
 }

@@ -4,26 +4,26 @@ import {
   X, CheckCircle2, AlertCircle, Calculator, FileSpreadsheet
 } from 'lucide-react';
 import { addPart, updatePart, deletePart, KATEGORI_OPTIONS } from '../utils/storage';
-import { formatRupiah } from '../utils/helpers';
+import { formatRupiah, formatTanggalSingkat, getTodayStr } from '../utils/helpers';
 import KalkulatorMarkup from '../components/KalkulatorMarkup';
 
-const EMPTY_FORM = {
+const getEmptyForm = () => ({
   kode: '',
   kategori: 'Sparepart',
   deskripsi: '',
   harga: '',
   stok: '',
   keterangan: '',
-};
+  tanggalMasuk: getTodayStr(),
+});
 
 export default function DatabasePart({ parts, onRefresh }) {
   // States
-  const [form, setForm] = useState(EMPTY_FORM);
+  const [form, setForm] = useState(getEmptyForm());
   const [editId, setEditId] = useState(null);
   const [selectedPart, setSelectedPart] = useState(null);
   
   // Search States
-  const [searchType, setSearchType] = useState('By Deskripsi');
   const [searchValue, setSearchValue] = useState('');
   const [searchKategori, setSearchKategori] = useState('');
   
@@ -38,31 +38,35 @@ export default function DatabasePart({ parts, onRefresh }) {
     setTimeout(() => setToast(null), 3000);
   };
 
-  // ----- Filtering Logic -----
+  // ----- Filtering & Sorting Logic -----
   const filteredParts = useMemo(() => {
-    return parts.filter(p => {
-      // 1. Kategori Filter
-      if (searchKategori && searchKategori !== 'Semua' && p.kategori !== searchKategori) {
-        return false;
-      }
-      // 2. Value Filter
-      if (!searchValue.trim()) return true;
-      
-      const val = searchValue.toLowerCase();
-      const numVal = Number(searchValue);
-
-      switch (searchType) {
-        case 'By Kode': return p.kode.toLowerCase().includes(val);
-        case 'By Deskripsi': return p.deskripsi.toLowerCase().includes(val);
-        case 'By Keterangan': return (p.keterangan || '').toLowerCase().includes(val);
-        case 'Harga di atas': return !isNaN(numVal) && p.harga > numVal;
-        case 'Harga di bawah': return !isNaN(numVal) && p.harga < numVal;
-        case 'Stok di atas =': return !isNaN(numVal) && p.stok >= numVal;
-        case 'Stok di bawah =': return !isNaN(numVal) && p.stok <= numVal;
-        default: return true;
-      }
-    });
-  }, [parts, searchType, searchValue, searchKategori]);
+    return parts
+      .filter(p => {
+        // 1. Kategori Filter
+        if (searchKategori && searchKategori !== 'Semua' && p.kategori !== searchKategori) {
+          return false;
+        }
+        // 2. Value Filter
+        if (!searchValue.trim()) return true;
+        
+        const val = searchValue.toLowerCase();
+        return (
+          p.kode.toLowerCase().includes(val) ||
+          p.deskripsi.toLowerCase().includes(val) ||
+          (p.keterangan || '').toLowerCase().includes(val)
+        );
+      })
+      .sort((a, b) => {
+        // Sort by category first (sejajar per jenis yang sama)
+        const katA = a.kategori || '';
+        const katB = b.kategori || '';
+        if (katA !== katB) {
+          return katA.localeCompare(katB);
+        }
+        // If categories are same, sort by description
+        return (a.deskripsi || '').localeCompare(b.deskripsi || '');
+      });
+  }, [parts, searchValue, searchKategori]);
 
   // ----- Form Actions -----
   const handleSavePart = async () => {
@@ -77,7 +81,8 @@ export default function DatabasePart({ parts, onRefresh }) {
       deskripsi: form.deskripsi,
       harga: Number(form.harga),
       stok: Number(form.stok) || 0,
-      keterangan: form.keterangan || ''
+      keterangan: form.keterangan || '',
+      tanggalMasuk: form.tanggalMasuk || getTodayStr()
     };
 
     if (editId) {
@@ -88,7 +93,7 @@ export default function DatabasePart({ parts, onRefresh }) {
       showToast('Barang berhasil ditambahkan!');
     }
     
-    setForm(EMPTY_FORM);
+    setForm(getEmptyForm());
     setEditId(null);
     setSelectedPart(null);
     if (onRefresh) await onRefresh();
@@ -105,7 +110,8 @@ export default function DatabasePart({ parts, onRefresh }) {
       deskripsi: selectedPart.deskripsi,
       harga: selectedPart.harga,
       stok: selectedPart.stok,
-      keterangan: selectedPart.keterangan
+      keterangan: selectedPart.keterangan,
+      tanggalMasuk: selectedPart.tanggalMasuk || ''
     });
     setEditId(selectedPart.id);
   };
@@ -125,8 +131,14 @@ export default function DatabasePart({ parts, onRefresh }) {
     if (!selectedPart) return;
     if (stokAdd === 0) return;
     const newStok = Math.max(0, selectedPart.stok + stokAdd);
-    await updatePart(selectedPart.id, { stok: newStok });
-    setSelectedPart({ ...selectedPart, stok: newStok });
+    
+    const updates = { stok: newStok };
+    if (stokAdd > 0) {
+      updates.tanggalMasuk = getTodayStr();
+    }
+    
+    await updatePart(selectedPart.id, updates);
+    setSelectedPart({ ...selectedPart, ...updates });
     setStokAdd(0);
     if (onRefresh) await onRefresh();
     showToast('Stok berhasil diupdate!');
@@ -215,13 +227,22 @@ export default function DatabasePart({ parts, onRefresh }) {
                       <Calculator size={11} className="stroke-[2.5]" /> Kalkulator
                     </button>
                   </div>
-                  <input type="number" className="input-field py-1.5 text-sm" value={form.harga} onChange={e => setForm({...form, harga: e.target.value})} />
+                   <input 
+                    type="text" 
+                    className="input-field py-1.5 text-sm" 
+                    value={form.harga ? form.harga.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".") : ''} 
+                    onChange={e => {
+                      const val = e.target.value.replace(/\D/g, '');
+                      setForm({...form, harga: val});
+                    }} 
+                  />
                 </div>
                 <div>
                   <label className="text-xs text-slate-500 mb-1 block">Stok Awal</label>
                   <input type="number" className="input-field py-1.5 text-sm" value={form.stok} onChange={e => setForm({...form, stok: e.target.value})} />
                 </div>
               </div>
+
               <div>
                 <label className="text-xs text-slate-500 mb-1 block">Keterangan / Spesifikasi</label>
                 <textarea
@@ -240,7 +261,7 @@ export default function DatabasePart({ parts, onRefresh }) {
                   <Edit2 size={16} /> Edit Terpilih
                 </button>
                 {editId && (
-                  <button onClick={() => {setEditId(null); setForm(EMPTY_FORM);}} className="px-3 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 rounded-lg">
+                  <button onClick={() => {setEditId(null); setForm(getEmptyForm());}} className="px-3 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 rounded-lg">
                     <X size={16} />
                   </button>
                 )}
@@ -259,6 +280,7 @@ export default function DatabasePart({ parts, onRefresh }) {
                 Update
               </button>
             </div>
+
             {selectedPart && (
               <p className="text-xs text-slate-500 mt-2">Barang terpilih: {selectedPart.deskripsi} (Stok: {selectedPart.stok})</p>
             )}
@@ -283,27 +305,19 @@ export default function DatabasePart({ parts, onRefresh }) {
         </div>
 
         {/* ================= PANEL KANAN & TENGAH ================= */}
-        <div className="lg:col-span-8 space-y-4">
+        <div className="lg:col-span-8 flex flex-col space-y-4 h-full">
           
           {/* Panel Pencarian Data */}
           <div className="card p-4 border-t-4 border-t-blue-500">
             <div className="flex flex-col md:flex-row gap-4">
-              <div className="flex-1 space-y-3">
-                <div className="flex flex-wrap gap-x-4 gap-y-2 text-xs">
-                  {['By Kode', 'By Deskripsi', 'By Keterangan', 'Harga di atas', 'Harga di bawah', 'Stok di atas =', 'Stok di bawah ='].map(opt => (
-                    <label key={opt} className="flex items-center gap-1 cursor-pointer">
-                      <input type="radio" name="searchType" checked={searchType === opt} onChange={() => setSearchType(opt)} className="text-blue-600" />
-                      <span className="text-slate-600">{opt}</span>
-                    </label>
-                  ))}
-                </div>
+              <div className="flex-1">
                 <div className="flex gap-2">
                   <div className="relative flex-1">
                     <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
                     <input 
-                      type={searchType.includes('Harga') || searchType.includes('Stok') ? 'number' : 'text'}
+                      type="text"
                       className="input-field pl-9" 
-                      placeholder="Cari barang..." 
+                      placeholder="Cari Kode, Deskripsi, Keterangan..." 
                       value={searchValue} 
                       onChange={e => setSearchValue(e.target.value)} 
                     />
@@ -325,8 +339,8 @@ export default function DatabasePart({ parts, onRefresh }) {
           </div>
 
           {/* Tabel Daftar Barang */}
-          <div className="card overflow-hidden border border-slate-200">
-            <div className="overflow-x-auto max-h-[520px] overflow-y-auto">
+          <div className="card overflow-hidden border border-slate-200 flex-1 flex flex-col">
+            <div className="overflow-x-auto flex-1 overflow-y-auto">
               <table className="w-full text-sm text-left">
                 <thead className="bg-slate-50 text-xs text-slate-500 uppercase sticky top-0 z-10 shadow-sm border-b border-slate-200">
                   <tr>

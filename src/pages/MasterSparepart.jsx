@@ -307,12 +307,14 @@ export default function MasterSparepart({ spareparts, onRefresh }) {
                 <div>
                   <label className="label">Harga Jual (Rp) *</label>
                   <input
-                    type="number"
-                    placeholder="cth: 55000"
-                    value={form.hargaJual}
-                    onChange={e => handleChange('hargaJual', e.target.value)}
+                    type="text"
+                    placeholder="cth: 55.000"
+                    value={form.hargaJual ? form.hargaJual.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".") : ''}
+                    onChange={e => {
+                      const val = e.target.value.replace(/\D/g, '');
+                      handleChange('hargaJual', val);
+                    }}
                     className={`input-field ${errors.hargaJual ? 'border-red-500' : ''}`}
-                    min="1"
                   />
                   {form.hargaJual && !isNaN(form.hargaJual) && Number(form.hargaJual) > 0 && (
                     <p className="text-slate-500 text-xs mt-1">= {formatRupiah(Number(form.hargaJual))}</p>

@@ -91,6 +91,20 @@ export const generateNomorNota = (existingNotas) => {
   return `AGS${nextNum}`;
 };
 
+// Generate nomor nota otomatis format AGS/PC/0001 untuk kasir penjualan mandiri
+export const generateNomorNotaPenjualan = (existingNotas) => {
+  const allNums = existingNotas
+    .map(n => {
+      const match = n.nomorNota?.match(/AGS\/PC\/(\d+)/i);
+      if (match) return parseInt(match[1]);
+      return 0;
+    })
+    .filter(n => !isNaN(n));
+  const maxNum = allNums.length > 0 ? Math.max(...allNums) : 0;
+  const nextNum = String(maxNum + 1).padStart(4, '0');
+  return `AGS/PC/${nextNum}`;
+};
+
 // Generate ID unik
 export const generateId = () => {
   return `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
@@ -124,4 +138,4 @@ export const truncate = (str, n = 30) => {
 };
 
 // Versi Aplikasi AGS Techflow (Pusat Kendali Versi)
-export const APP_VERSION = '8.6.2';
+export const APP_VERSION = '1.0.0';

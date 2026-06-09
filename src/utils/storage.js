@@ -1,4 +1,4 @@
-import { generateId } from './helpers';
+import { generateId, getTodayStr } from './helpers';
 
 export const KATEGORI_OPTIONS = [
   'Sparepart', 'Accessories', 'Unit New', 'Unit Second'
@@ -115,6 +115,25 @@ export const getCustomers = async () => {
 // ==================== INITIALIZE DATA ====================
 export const initializeData = async () => {
   if (window.electronAPI) {
+    // Sync custom settings from SQLite settings table to localStorage
+    try {
+      const settings = await window.electronAPI.dbCall('settings', 'getSettings') || {};
+      if (settings.ags_is_custom_markup !== undefined) {
+        localStorage.setItem('ags_is_custom_markup', settings.ags_is_custom_markup);
+      }
+      if (settings.ags_custom_markup_tiers !== undefined) {
+        localStorage.setItem('ags_custom_markup_tiers', settings.ags_custom_markup_tiers);
+      }
+      if (settings.ags_hidden_keuangan_ids !== undefined) {
+        localStorage.setItem('ags_hidden_keuangan_ids', settings.ags_hidden_keuangan_ids);
+      }
+      if (settings.ags_zoom_level !== undefined) {
+        localStorage.setItem('ags_zoom_level', settings.ags_zoom_level);
+      }
+    } catch (err) {
+      console.error('Failed to sync SQLite settings to localStorage:', err);
+    }
+
     const parts = await getParts();
     // If database is empty, check for migration from localStorage
     if (parts.length === 0) {
@@ -416,7 +435,10 @@ export const addService = async (service) => {
     statusPengerjaan: 'Proses Pengerjaan',
     statusPembayaran: 'Lunas',
     dibayar: 0,
-    riwayatCicilan: '[]'
+    riwayatCicilan: '[]',
+    tanggalAmbil: '',
+    items: '[]',
+    jasaPasang: 0
   };
   
   if (window.electronAPI) {
@@ -427,12 +449,209 @@ export const addService = async (service) => {
   return newItem;
 };
 
-export const updateService = async (id, updates) => {
-  if (window.electronAPI) {
-    await window.electronAPI.dbCall('services', 'update', { id, updates });
+// Menghubungkan sparepart dari kasir penjualan ke data servisan aktif
+export const addPartsToService = async (serviceId, cartItems, jasaPasang) => {
+  const allServices = await getServices();
+  const service = allServices.find(s => s.id === serviceId);
+  if (!service) throw new Error('Service tidak ditemukan');
+
+  let currentItems = [];
+  try {
+    currentItems = service.items ? (typeof service.items === 'string' ? JSON.parse(service.items) : service.items) : [];
+  } catch (e) {
+    currentItems = [];
+  }
+
+  const updatedItems = [...currentItems];
+  cartItems.forEach(cartItem => {
+    const existing = updatedItems.find(i => i.partId === cartItem.partId);
+    if (existing) {
+      existing.qty += cartItem.qty;
+      existing.subtotal = existing.qty * existing.harga;
+    } else {
+      updatedItems.push({ ...cartItem });
+    }
+  });
+
+  const cartTotal = cartItems.reduce((sum, item) => sum + (item.subtotal || 0), 0);
+  const newJasaPasang = (service.jasaPasang || 0) + Number(jasaPasang);
+  const newBiaya = (service.biaya || 0) + Number(jasaPasang) + cartTotal;
+
+  const updates = {
+    items: JSON.stringify(updatedItems),
+    jasaPasang: newJasaPasang,
+    biaya: newBiaya
+  };
+
+  if (service.statusPembayaran === 'Lunas') {
+    updates.dibayar = newBiaya;
   } else {
-    const all = await getServices();
-    setLocal('ags_services', all.map(s => s.id === id ? { ...s, ...updates } : s));
+    updates.dibayar = service.dibayar || 0;
+  }
+
+  const shouldDeductStock = service.statusPengerjaan === 'Sudah Diambil';
+
+  if (window.electronAPI) {
+    const queries = [];
+    queries.push({ table: 'services', action: 'update', id: serviceId, data: updates });
+
+    if (shouldDeductStock) {
+      const parts = await getParts();
+      cartItems.forEach(item => {
+        const part = parts.find(p => p.id === item.partId);
+        if (part) {
+          queries.push({ table: 'parts', action: 'update', id: part.id, data: { stok: Math.max(0, part.stok - item.qty) } });
+        }
+      });
+    }
+
+    await window.electronAPI.dbCall(null, 'transaction', queries);
+  } else {
+    // LocalStorage Fallback
+    const updatedServices = allServices.map(s => s.id === serviceId ? { ...s, ...updates } : s);
+    setLocal('ags_services', updatedServices);
+
+    if (shouldDeductStock) {
+      const parts = await getParts();
+      const updatedParts = parts.map(p => {
+        const item = cartItems.find(i => i.partId === p.id);
+        if (item) return { ...p, stok: Math.max(0, p.stok - item.qty) };
+        return p;
+      });
+      setLocal('ags_parts', updatedParts);
+    }
+  }
+
+  return { ...service, ...updates };
+};
+
+// Menghapus sparepart terpasang dari data servisan dan mengembalikan stok
+export const removePartFromService = async (serviceId, partId) => {
+  const allServices = await getServices();
+  const service = allServices.find(s => s.id === serviceId);
+  if (!service) throw new Error('Service tidak ditemukan');
+
+  let currentItems = [];
+  try {
+    currentItems = service.items ? (typeof service.items === 'string' ? JSON.parse(service.items) : service.items) : [];
+  } catch (e) {
+    currentItems = [];
+  }
+
+  const targetItem = currentItems.find(i => i.partId === partId);
+  if (!targetItem) return service; // No item to remove
+
+  const updatedItems = currentItems.filter(i => i.partId !== partId);
+  const itemTotal = targetItem.subtotal || 0;
+  const newBiaya = Math.max(0, (service.biaya || 0) - itemTotal);
+
+  const updates = {
+    items: JSON.stringify(updatedItems),
+    biaya: newBiaya
+  };
+
+  if (service.statusPembayaran === 'Lunas') {
+    updates.dibayar = newBiaya;
+  } else {
+    updates.dibayar = Math.min(service.dibayar || 0, newBiaya);
+  }
+
+  const shouldRestoreStock = service.statusPengerjaan === 'Sudah Diambil';
+
+  if (window.electronAPI) {
+    const queries = [];
+    queries.push({ table: 'services', action: 'update', id: serviceId, data: updates });
+
+    if (shouldRestoreStock) {
+      const parts = await getParts();
+      const part = parts.find(p => p.id === partId);
+      if (part) {
+        queries.push({ table: 'parts', action: 'update', id: partId, data: { stok: part.stok + targetItem.qty } });
+      }
+    }
+
+    await window.electronAPI.dbCall(null, 'transaction', queries);
+  } else {
+    const updatedServices = allServices.map(s => s.id === serviceId ? { ...s, ...updates } : s);
+    setLocal('ags_services', updatedServices);
+
+    if (shouldRestoreStock) {
+      const parts = await getParts();
+      const updatedParts = parts.map(p => {
+        if (p.id === partId) return { ...p, stok: p.stok + targetItem.qty };
+        return p;
+      });
+      setLocal('ags_parts', updatedParts);
+    }
+  }
+
+  return { ...service, ...updates };
+};
+
+export const updateService = async (id, updates) => {
+  const all = await getServices();
+  const service = all.find(s => s.id === id);
+  if (!service) return;
+
+  const oldStatus = service.statusPengerjaan;
+  const newStatus = updates.statusPengerjaan !== undefined ? updates.statusPengerjaan : oldStatus;
+
+  let itemsList = [];
+  try {
+    const itemsStr = updates.items !== undefined ? updates.items : service.items;
+    itemsList = itemsStr ? (typeof itemsStr === 'string' ? JSON.parse(itemsStr) : itemsStr) : [];
+  } catch (e) {
+    itemsList = [];
+  }
+
+  const isEnteringSudahDiambil = oldStatus !== 'Sudah Diambil' && newStatus === 'Sudah Diambil';
+  const isLeavingSudahDiambil = oldStatus === 'Sudah Diambil' && newStatus !== 'Sudah Diambil';
+
+  if (window.electronAPI) {
+    const queries = [];
+    queries.push({ table: 'services', action: 'update', id, data: updates });
+
+    if (isEnteringSudahDiambil) {
+      const parts = await getParts();
+      itemsList.forEach(item => {
+        const part = parts.find(p => p.id === item.partId);
+        if (part) {
+          queries.push({ table: 'parts', action: 'update', id: part.id, data: { stok: Math.max(0, part.stok - item.qty) } });
+        }
+      });
+    } else if (isLeavingSudahDiambil) {
+      const parts = await getParts();
+      itemsList.forEach(item => {
+        const part = parts.find(p => p.id === item.partId);
+        if (part) {
+          queries.push({ table: 'parts', action: 'update', id: part.id, data: { stok: part.stok + item.qty } });
+        }
+      });
+    }
+
+    await window.electronAPI.dbCall(null, 'transaction', queries);
+  } else {
+    // LocalStorage Fallback
+    const updatedServices = all.map(s => s.id === id ? { ...s, ...updates } : s);
+    setLocal('ags_services', updatedServices);
+
+    if (isEnteringSudahDiambil) {
+      const parts = await getParts();
+      const updatedParts = parts.map(p => {
+        const item = itemsList.find(i => i.partId === p.id);
+        if (item) return { ...p, stok: Math.max(0, p.stok - item.qty) };
+        return p;
+      });
+      setLocal('ags_parts', updatedParts);
+    } else if (isLeavingSudahDiambil) {
+      const parts = await getParts();
+      const updatedParts = parts.map(p => {
+        const item = itemsList.find(i => i.partId === p.id);
+        if (item) return { ...p, stok: p.stok + item.qty };
+        return p;
+      });
+      setLocal('ags_parts', updatedParts);
+    }
   }
 };
 

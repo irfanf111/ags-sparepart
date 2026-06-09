@@ -4,6 +4,24 @@ import { formatRupiah, formatTanggalSingkat, getTodayStr } from '../utils/helper
 import { Printer, X } from 'lucide-react';
 import { getSettings } from '../utils/storage';
 
+const safeParseItems = (itemsStr) => {
+  try {
+    return JSON.parse(itemsStr || '[]') || [];
+  } catch (e) {
+    console.error("Error parsing items JSON:", e);
+    return [];
+  }
+};
+
+const maskPhoneNumber = (phone) => {
+  if (!phone || phone === '-') return '-';
+  const clean = phone.trim();
+  if (clean.length < 8) return clean;
+  const first = clean.slice(0, 4);
+  const last = clean.slice(-4);
+  return `${first}****${last}`;
+};
+
 export default function NotaServicePrint({ data, onClose }) {
   const [printMode, setPrintMode] = useState('A4');
   const [profile, setProfile] = useState({
@@ -44,8 +62,8 @@ export default function NotaServicePrint({ data, onClose }) {
   // =========================================================
   const renderNotaCard = () => (
     <div
-      className="nota-card relative flex flex-col px-5 pt-3 pb-3"
-      style={{ minHeight: '13.8cm', height: 'auto', fontFamily: 'Arial, sans-serif', fontSize: '12px', lineHeight: '1.45', color: '#000', background: '#fdfbf7' }}
+      className="nota-card relative flex flex-col px-4 pt-2.5 pb-2.5"
+      style={{ minHeight: '13.5cm', height: 'auto', fontFamily: 'Arial, sans-serif', fontSize: '11px', lineHeight: '1.4', color: '#000', background: '#fdfbf7', boxSizing: 'border-box' }}
     >
       {/* Watermark Logo */}
       <div
@@ -67,7 +85,7 @@ export default function NotaServicePrint({ data, onClose }) {
         }}
       >
         <img 
-          src="logo.png" 
+          src="logo_app.png" 
           alt="Watermark Logo" 
           style={{ 
             width: '180px', 
@@ -77,101 +95,118 @@ export default function NotaServicePrint({ data, onClose }) {
             marginBottom: '4px'
           }} 
         />
-        <div style={{ fontSize: '4.5rem', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.12em', border: '3px dashed #000', borderRadius: '1rem', padding: '6px 24px', whiteSpace: 'nowrap', color: '#000' }}>
+        <div style={{ fontSize: '4.5rem', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.12em', whiteSpace: 'nowrap', color: '#000' }}>
           {profile.nama_singkat}
         </div>
       </div>
 
       {/* Konten Nota */}
-      <div className="relative flex flex-col w-full" style={{ zIndex: 1, height: '100%' }}>
-
-        {/* Header / Kop */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '4px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <img src="logo.png" alt="Logo AGS" style={{ width: '84px', height: '84px', objectFit: 'contain', flexShrink: 0 }} />
-            <div>
-              <div style={{ fontWeight: 900, fontSize: '18px', color: '#dc2626', textTransform: 'uppercase', letterSpacing: '0.05em', lineHeight: 1 }}>{profile.nama_singkat}</div>
-              <div style={{ fontSize: '11px', fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.08em' }}>{profile.nama_bengkel}</div>
-              <div style={{ fontSize: '11px', color: '#374151' }}>{profile.alamat_bengkel}</div>
-              <div style={{ fontSize: '11px', color: '#374151' }}>HP. {profile.no_hp_bengkel}</div>
+      <div className="relative flex flex-col w-full justify-between" style={{ zIndex: 1, flexGrow: 1, height: '100%' }}>
+        <div className="flex flex-col w-full">
+          {/* Header / Kop */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '2px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <img src="logo_app.png" alt="Logo AGS" style={{ width: '60px', height: '60px', objectFit: 'contain', flexShrink: 0 }} />
+              <div>
+                <div style={{ fontWeight: 900, fontSize: '15px', color: '#dc2626', textTransform: 'uppercase', letterSpacing: '0.05em', lineHeight: 1.1 }}>{profile.nama_singkat}</div>
+                <div style={{ fontSize: '10px', fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.08em' }}>{profile.nama_bengkel}</div>
+                <div style={{ fontSize: '10px', color: '#374151', lineHeight: 1.2 }}>{profile.alamat_bengkel}</div>
+                <div style={{ fontSize: '10px', color: '#374151', lineHeight: 1.2 }}>HP. {profile.no_hp_bengkel}</div>
+              </div>
+            </div>
+            <div style={{ fontSize: '10px', color: '#6b7280', textAlign: 'right', marginTop: '4px' }}>
+              Dicetak: {formatTanggalSingkat(getTodayStr())} / {new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
             </div>
           </div>
-          <div style={{ fontSize: '11px', color: '#6b7280', textAlign: 'right', marginTop: '8px' }}>
-            Dicetak: {formatTanggalSingkat(getTodayStr())} / {new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
+
+          <div style={{ borderTop: '1.5px solid #1f2937', marginTop: '6px', marginBottom: '4px' }}></div>
+          <div style={{ textAlign: 'center', fontWeight: 800, fontSize: '14px', textTransform: 'uppercase', letterSpacing: '0.15em', margin: '4px 0', color: '#111827' }}>
+            Tanda Terima Service
           </div>
+          <div style={{ borderTop: '1.5px solid #1f2937', marginTop: '4px', marginBottom: '6px' }}></div>
+
+          {/* Info Grid (2 Kolom) */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1.1fr 0.9fr', gap: '8px 24px', borderBottom: '1.5px solid #1f2937', padding: '6px 4px', fontSize: '11px', lineHeight: '1.3' }}>
+            {/* Kolom Kiri */}
+            <div style={{ display: 'grid', gridTemplateColumns: '95px 1fr', gap: '3px 8px', alignItems: 'start' }}>
+              <div style={{ color: '#4b5563', fontWeight: 600 }}>No. Nota</div>
+              <div style={{ color: '#111827', fontFamily: 'monospace', fontWeight: 700 }}>: {data.noUrut || data.kode}</div>
+
+              <div style={{ color: '#4b5563', fontWeight: 600 }}>Tgl Masuk</div>
+              <div style={{ color: '#111827' }}>: {formatTanggalSingkat(data.tanggalMasuk)} / {new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}</div>
+
+              <div style={{ color: '#4b5563', fontWeight: 600 }}>Status</div>
+              <div style={{ color: '#dc2626', fontWeight: 700, textTransform: 'uppercase' }}>: {data.statusPengerjaan}</div>
+            </div>
+
+            {/* Kolom Kanan */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 180px', gap: '3px 8px', alignItems: 'start' }}>
+              <div style={{ color: '#4b5563', fontWeight: 600, textAlign: 'right' }}>Nama Pemilik</div>
+              <div style={{ color: '#111827' }}>:</div>
+              <div style={{ color: '#111827', fontWeight: 700 }}>{data.pemilik}</div>
+
+              <div style={{ color: '#4b5563', fontWeight: 600, textAlign: 'right' }}>Barang / Tipe</div>
+              <div style={{ color: '#111827' }}>:</div>
+              <div style={{ color: '#111827', fontWeight: 700 }}>{data.jenis}{data.merek && data.merek !== '-' ? ` / ${data.merek}` : ''}</div>
+
+              <div style={{ color: '#4b5563', fontWeight: 600, textAlign: 'right' }}>No. HP</div>
+              <div style={{ color: '#111827' }}>:</div>
+              <div style={{ color: '#111827' }}>{maskPhoneNumber(data.noHp)}</div>
+            </div>
+          </div>
+
+          <div style={{ borderTop: '1px solid #e5e7eb', margin: '4px 0' }}></div>
+
+          {/* Content Boxes */}
+          <div style={{ position: 'relative', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '4px' }}>
+            <div style={{ zIndex: 1 }}>
+              <div style={{ fontSize: '11px', fontWeight: 700, color: '#374151', textTransform: 'uppercase', marginBottom: '2px' }}>Masalah / Penyelesaian :</div>
+              <div style={{ border: '1px solid #cbd5e1', borderRadius: '4px', padding: '6px 8px', minHeight: '48px', fontSize: '10px', whiteSpace: 'pre-wrap', wordBreak: 'break-word', background: 'transparent', lineHeight: '1.35', color: '#1f2937' }}>
+                {data.keluhan}{data.catatanTeknisi ? `\n\nPenanganan:\n${data.catatanTeknisi}` : ''}
+              </div>
+            </div>
+            <div style={{ zIndex: 1 }}>
+              <div style={{ fontSize: '11px', fontWeight: 700, color: '#374151', textTransform: 'uppercase', marginBottom: '2px' }}>Kelengkapan :</div>
+              <div style={{ border: '1px solid #cbd5e1', borderRadius: '4px', padding: '6px 8px', minHeight: '48px', fontSize: '10px', whiteSpace: 'pre-wrap', wordBreak: 'break-word', background: 'transparent', lineHeight: '1.35', color: '#1f2937' }}>
+                {data.kelengkapan}
+              </div>
+            </div>
+          </div>
+
+          <div style={{ borderTop: '1px solid #e5e7eb', marginTop: '4px', marginBottom: '6px' }}></div>
+
+          {/* Spareparts & Fees Breakdown Table */}
+          {((data.items && safeParseItems(data.items).length > 0) || (Number(data.biaya) > 0)) && (
+            <div style={{ zIndex: 1, marginTop: '2px', marginBottom: '6px' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '9.5px', lineHeight: '1.3' }}>
+                <tbody style={{ borderBottom: '1.5px solid #1f2937' }}>
+                  {safeParseItems(data.items).map((item, idx) => (
+                    <tr key={idx} style={{ borderBottom: '1px solid #e5e7eb' }}>
+                      <td style={{ padding: '4px 0', color: '#1f2937' }}>{item.deskripsi}</td>
+                      <td style={{ padding: '4px 0', textAlign: 'center', color: '#1f2937', width: '40px' }}>{item.qty}</td>
+                      <td style={{ padding: '4px 0', textAlign: 'right', color: '#1f2937', width: '90px' }}>{formatRupiah(item.harga)}</td>
+                      <td style={{ padding: '4px 0', textAlign: 'right', color: '#1f2937', width: '100px' }}>{formatRupiah(item.subtotal)}</td>
+                    </tr>
+                  ))}
+                  {((Number(data.biaya) || 0) - safeParseItems(data.items).reduce((sum, i) => sum + (i.subtotal || 0), 0)) > 0 && (
+                    <tr style={{ fontWeight: 'bold' }}>
+                      <td colSpan="3" style={{ padding: '4px 0', textAlign: 'right', color: '#1f2937' }}>Jasa Servis</td>
+                      <td style={{ padding: '4px 0', textAlign: 'right', color: '#1f2937', width: '100px' }}>
+                        {formatRupiah(Number(data.biaya) - safeParseItems(data.items).reduce((sum, i) => sum + (i.subtotal || 0), 0))}
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
-
-        <div style={{ borderTop: '2px solid #000', marginBottom: '1px' }}></div>
-        <div style={{ borderTop: '4px solid #000' }}></div>
-        <div style={{ textAlign: 'center', fontWeight: 700, fontSize: '15px', textTransform: 'uppercase', letterSpacing: '0.05em', margin: '2px 0' }}>
-          Tanda Terima Service
-        </div>
-        <div style={{ borderTop: '1px solid #000', marginBottom: '2px' }}></div>
-
-        {/* Info Grid (2 Kolom) */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px 24px', borderBottom: '2px solid #000', padding: '4px 6px', fontSize: '12px', lineHeight: '1.45' }}>
-          {/* Kolom Kiri */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-            <div>
-              <span style={{ color: '#6b7280', fontWeight: 700, textTransform: 'uppercase' }}>Tgl Masuk : </span>
-              <strong>{formatTanggalSingkat(data.tanggalMasuk)} / {new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}</strong>
-            </div>
-            <div>
-              <span style={{ color: '#6b7280', fontWeight: 700, textTransform: 'uppercase' }}>No. Nota : </span>
-              <strong style={{ fontFamily: 'monospace' }}>{data.noUrut || data.kode}</strong>
-            </div>
-            <div>
-              <span style={{ color: '#6b7280', fontWeight: 700, textTransform: 'uppercase' }}>Jenis Barang : </span>
-              <strong>{data.jenis}</strong>
-            </div>
-            <div>
-              <span style={{ color: '#6b7280', fontWeight: 700, textTransform: 'uppercase' }}>Merek / Tipe : </span>
-              <strong>{data.merek}</strong>
-            </div>
-          </div>
-
-          {/* Kolom Kanan */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', alignItems: 'flex-end', textAlign: 'right' }}>
-            <div>
-              <span style={{ color: '#6b7280', fontWeight: 700, textTransform: 'uppercase' }}>Nama Pemilik : </span>
-              <strong>{data.pemilik}</strong>
-            </div>
-            <div>
-              <span style={{ color: '#6b7280', fontWeight: 700, textTransform: 'uppercase' }}>No. HP : </span>
-              <strong>{data.noHp || '-'}</strong>
-            </div>
-            <div>
-              <span style={{ color: '#6b7280', fontWeight: 700, textTransform: 'uppercase' }}>Status : </span>
-              <strong style={{ color: '#dc2626', textTransform: 'uppercase' }}>{data.statusPengerjaan}</strong>
-            </div>
-          </div>
-        </div>
-
-        <div style={{ borderTop: '1px solid #000', margin: '3px 0' }}></div>
-
-        {/* Content Boxes */}
-        <div style={{ position: 'relative', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px', marginBottom: '2px' }}>
-          <div style={{ zIndex: 1 }}>
-            <div style={{ fontSize: '12px', fontWeight: 700, color: '#374151', textTransform: 'uppercase', marginBottom: '2px' }}>Masalah / Penyelesaian :</div>
-            <div style={{ border: '1px solid #000', padding: '6px', minHeight: '75px', fontSize: '11px', whiteSpace: 'pre-wrap', wordBreak: 'break-word', background: 'transparent' }}>
-              {data.keluhan}{data.catatanTeknisi ? `\n\nPenanganan:\n${data.catatanTeknisi}` : ''}
-            </div>
-          </div>
-          <div style={{ zIndex: 1 }}>
-            <div style={{ fontSize: '12px', fontWeight: 700, color: '#374151', textTransform: 'uppercase', marginBottom: '2px' }}>Kelengkapan :</div>
-            <div style={{ border: '1px solid #000', padding: '6px', minHeight: '75px', fontSize: '11px', whiteSpace: 'pre-wrap', wordBreak: 'break-word', background: 'transparent' }}>
-              {data.kelengkapan}
-            </div>
-          </div>
-        </div>
-
-        <div style={{ borderTop: '1px solid #000', marginTop: '6px', marginBottom: '6px' }}></div>
 
         {/* Footer & Signature */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-          <div style={{ width: '60%', marginTop: '40px' }}>
-            <div style={{ fontWeight: 700, fontSize: '10px', marginBottom: '2px' }}>Syarat &amp; Ketentuan / Garansi :</div>
-            <div style={{ fontSize: '9px', lineHeight: 1.4, color: '#1f2937' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginTop: '10px' }}>
+          <div style={{ width: '60%' }}>
+            <div style={{ fontWeight: 700, fontSize: '9.5px', marginBottom: '2px' }}>Syarat &amp; Ketentuan / Garansi :</div>
+            <div style={{ fontSize: '8.5px', lineHeight: 1.3, color: '#1f2937' }}>
               {profile.pesan_kaki_nota.split('\n').map((line, i) => {
                 const trimmed = line.trim();
                 const isBullet = trimmed.startsWith('-') || trimmed.startsWith('*');
@@ -191,13 +226,13 @@ export default function NotaServicePrint({ data, onClose }) {
             </div>
           </div>
           <div style={{ width: '40%', display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
-            <div style={{ fontSize: '13px', fontWeight: 700, marginBottom: '42px', textAlign: 'right' }}>
+            <div style={{ fontSize: '12px', fontWeight: 700, marginBottom: '10px', textAlign: 'right' }}>
               Total Biaya : {formatRupiah(data.biaya || 0)}
             </div>
             <div style={{ textAlign: 'center', width: '120px', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-              <div style={{ fontSize: '11px' }}>Hormat Kami,</div>
-              <div style={{ height: '75px', width: '100%' }}></div>
-              <div style={{ fontWeight: 700, fontSize: '11px', textTransform: 'uppercase', textDecoration: 'underline' }}>AGUS SUNARTO</div>
+              <div style={{ fontSize: '10px' }}>Hormat Kami,</div>
+              <div style={{ height: '45px', width: '100%' }}></div>
+              <div style={{ fontWeight: 700, fontSize: '10px', textTransform: 'uppercase', textDecoration: 'underline' }}>AGUS SUNARTO</div>
             </div>
           </div>
         </div>
@@ -253,7 +288,7 @@ export default function NotaServicePrint({ data, onClose }) {
             </div>
             <div className="flex justify-between text-[10px] mt-1">
               <span>Tgl Masuk : {formatTanggalSingkat(data.tanggalMasuk)}</span>
-              <span>No. HP : {data.noHp || '-'}</span>
+              <span>No. HP : {maskPhoneNumber(data.noHp)}</span>
             </div>
             <div className="flex justify-between text-[10px] mt-1">
               <span>Status : <strong className="text-red-600 font-bold uppercase">{data.statusPengerjaan}</strong></span>
@@ -270,8 +305,29 @@ export default function NotaServicePrint({ data, onClose }) {
             <div className="font-bold">Kelengkapan :</div>
             <div className="whitespace-pre-wrap break-words">{data.kelengkapan || '-'}</div>
             <div className="border-b border-black my-2"></div>
+            
+            {/* Spareparts & Fees Breakdown for Thermal */}
+            {((data.items && safeParseItems(data.items).length > 0) || (Number(data.biaya) > 0)) && (
+              <>
+                <div className="font-bold">Rincian Suku Cadang &amp; Jasa Servis:</div>
+                {safeParseItems(data.items).map((item, idx) => (
+                  <div key={idx} className="flex justify-between text-[10px] mt-1 pl-1">
+                    <span>{item.deskripsi} (x{item.qty})</span>
+                    <span>{formatRupiah(item.subtotal)}</span>
+                  </div>
+                ))}
+                {((Number(data.biaya) || 0) - safeParseItems(data.items).reduce((sum, i) => sum + (i.subtotal || 0), 0)) > 0 && (
+                  <div className="flex justify-between text-[10px] mt-1 pl-1 font-semibold">
+                    <span>Jasa Servis</span>
+                    <span>{formatRupiah(Number(data.biaya) - safeParseItems(data.items).reduce((sum, i) => sum + (i.subtotal || 0), 0))}</span>
+                  </div>
+                )}
+                <div className="border-b border-dashed border-black my-1"></div>
+              </>
+            )}
+            
             <div className="text-right font-bold">
-              Biaya : {data.biaya > 0 ? formatRupiah(data.biaya) : '-'}
+              Total Biaya : {data.biaya > 0 ? formatRupiah(data.biaya) : '-'}
             </div>
             <div className="border-b border-black my-2"></div>
             <div className="text-[10px] font-medium">

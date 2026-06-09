@@ -1,8 +1,9 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { ShoppingCart, Search, Printer, X, User, AlertCircle, CheckCircle2, Info, Tag, Package } from 'lucide-react';
-import { formatRupiah, generateNomorNota } from '../utils/helpers';
-import { KATEGORI_OPTIONS, getCustomers } from '../utils/storage';
+import { formatRupiah, generateNomorNota, formatTanggalSingkat, generateNomorNotaPenjualan } from '../utils/helpers';
+import { KATEGORI_OPTIONS, getCustomers, getServices, addPartsToService } from '../utils/storage';
 import NotaKontan from '../components/NotaKontan';
+import NotaServicePrint from '../components/NotaServicePrint';
 
 export default function TransaksiPenjualan({ parts, notas, onRefresh }) {
   const [search, setSearch] = useState('');
@@ -21,9 +22,18 @@ export default function TransaksiPenjualan({ parts, notas, onRefresh }) {
   const [toast, setToast] = useState(null);
   const [customers, setCustomers] = useState([]);
   const [detailPart, setDetailPart] = useState(null);
+  
+  const [activeServices, setActiveServices] = useState([]);
+  const [linkToService, setLinkToService] = useState(false);
+  const [selectedServiceId, setSelectedServiceId] = useState('');
+  const [jasaPasang, setJasaPasang] = useState('0');
+
   useEffect(() => {
     getCustomers().then(setCustomers);
-  }, []);
+    getServices().then(all => {
+      setActiveServices((all || []).filter(s => s.statusPengerjaan !== 'Sudah Diambil'));
+    });
+  }, [showCustomerModal]);
 
   const showToast = (msg, type = 'success') => {
     setToast({ msg, type });
@@ -75,17 +85,14 @@ export default function TransaksiPenjualan({ parts, notas, onRefresh }) {
 
   const handleProses = () => {
     if (cart.length === 0) return;
-    setCustomNomorNota(generateNomorNota(notas));
+    setCustomNomorNota(generateNomorNotaPenjualan(notas));
+    setLinkToService(false);
+    setSelectedServiceId('');
+    setJasaPasang('0');
     setShowCustomerModal(true);
   };
 
-  const handleCreateNota = () => {
-    const finalCustomer = customerMode === 'Daftar' ? selectedCustomer : manualCustomer;
-    if (!finalCustomer.trim()) {
-      alert('Nama customer harus diisi!');
-      return;
-    }
-
+  const handleCreateNota = async () => {
     const items = cart.map(c => ({
       id: c.part.id,
       partId: c.part.id,
@@ -96,6 +103,31 @@ export default function TransaksiPenjualan({ parts, notas, onRefresh }) {
       subtotal: c.qty * c.part.harga,
       keterangan: c.part.keterangan || ''
     }));
+
+    if (linkToService) {
+      if (!selectedServiceId) {
+        alert('Pilih data servisan terlebih dahulu!');
+        return;
+      }
+      try {
+        const updatedService = await addPartsToService(selectedServiceId, items, Number(jasaPasang));
+        setTransaksiData({
+          ...updatedService,
+          isService: true
+        });
+        setShowCustomerModal(false);
+        setShowNota(true);
+      } catch (err) {
+        alert('Gagal menghubungkan ke servisan: ' + err.message);
+      }
+      return;
+    }
+
+    const finalCustomer = customerMode === 'Daftar' ? selectedCustomer : manualCustomer;
+    if (!finalCustomer.trim()) {
+      alert('Nama customer harus diisi!');
+      return;
+    }
 
     setTransaksiData({
       nomorNota: customNomorNota,
@@ -117,6 +149,9 @@ export default function TransaksiPenjualan({ parts, notas, onRefresh }) {
   };
 
   if (showNota && transaksiData) {
+    if (transaksiData.isService) {
+      return <NotaServicePrint data={transaksiData} onClose={handleNotaComplete} />;
+    }
     return <NotaKontan data={transaksiData} onClose={handleNotaComplete} onRefresh={onRefresh} existingNotas={notas} />;
   }
 
@@ -266,41 +301,99 @@ export default function TransaksiPenjualan({ parts, notas, onRefresh }) {
             </div>
             
             <div className="p-6 space-y-6">
-              <div className="flex bg-slate-100/80 p-1.5 rounded-xl border border-slate-200 shadow-inner">
-                <button 
-                  className={`flex-1 py-2 text-sm font-bold rounded-lg transition-all duration-300 ${customerMode === 'Daftar' ? 'bg-white text-orange-600 shadow-md transform scale-[1.02]' : 'text-slate-500 hover:text-slate-700'}`}
-                  onClick={() => setCustomerMode('Daftar')}
-                >Input dari Daftar</button>
-                <button 
-                  className={`flex-1 py-2 text-sm font-bold rounded-lg transition-all duration-300 ${customerMode === 'Manual' ? 'bg-white text-orange-600 shadow-md transform scale-[1.02]' : 'text-slate-500 hover:text-slate-700'}`}
-                  onClick={() => setCustomerMode('Manual')}
-                >Input Manual</button>
+              {/* Option to Link to Active Service */}
+              <div className="bg-orange-50/50 p-3.5 rounded-xl border border-orange-200/60 shadow-sm mb-4">
+                <label className="flex items-center gap-2.5 cursor-pointer">
+                  <input 
+                    type="checkbox" 
+                    checked={linkToService} 
+                    onChange={e => {
+                      setLinkToService(e.target.checked);
+                      if (e.target.checked && activeServices.length > 0) {
+                        setSelectedServiceId(activeServices[0].id);
+                      } else {
+                        setSelectedServiceId('');
+                      }
+                    }} 
+                    className="text-orange-500 rounded focus:ring-orange-500 w-4 h-4 cursor-pointer" 
+                  />
+                  <span className="text-xs font-black text-slate-800">Hubungkan ke Data Servisan Aktif</span>
+                </label>
               </div>
 
-              {customerMode === 'Daftar' ? (
-                <div>
-                  <label className="text-xs text-slate-400 mb-1 block">Pilih Customer Sebelumnya</label>
-                  <select className="select-field w-full" value={selectedCustomer} onChange={e => setSelectedCustomer(e.target.value)}>
-                    <option value="">-- Pilih --</option>
-                    {customers.map(c => <option key={c} value={c}>{c}</option>)}
-                  </select>
+              {linkToService ? (
+                <div className="space-y-4 animate-scale-up">
+                  <div>
+                    <label className="text-xs text-slate-500 mb-1 block">Pilih Servisan Aktif</label>
+                    <select 
+                      className="select-field w-full" 
+                      value={selectedServiceId} 
+                      onChange={e => setSelectedServiceId(e.target.value)}
+                    >
+                      {activeServices.length === 0 ? (
+                        <option value="">-- Tidak ada servisan aktif --</option>
+                      ) : (
+                        activeServices.map(s => (
+                          <option key={s.id} value={s.id}>
+                            {s.noUrut} - {s.pemilik} ({s.jenis} {s.merek})
+                          </option>
+                        ))
+                      )}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-xs text-slate-500 mb-1 block">Biaya Jasa Servis / Pemasangan (Rp)</label>
+                    <input 
+                      type="text" 
+                      className="input-field w-full font-bold text-emerald-600" 
+                      placeholder="Masukkan biaya jasa servis/pasang..." 
+                      value={jasaPasang ? jasaPasang.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".") : ''} 
+                      onChange={e => {
+                        const val = e.target.value.replace(/\D/g, '');
+                        setJasaPasang(val);
+                      }} 
+                    />
+                  </div>
                 </div>
               ) : (
-                <div>
-                  <label className="text-xs text-slate-400 mb-1 block">Nama Customer Baru</label>
-                  <input type="text" className="input-field w-full" placeholder="Ketik nama lengkap..." value={manualCustomer} onChange={e => setManualCustomer(e.target.value)} />
-                </div>
+                <>
+                  <div className="flex bg-slate-100/80 p-1.5 rounded-xl border border-slate-200 shadow-inner">
+                    <button 
+                      className={`flex-1 py-2 text-sm font-bold rounded-lg transition-all duration-300 ${customerMode === 'Daftar' ? 'bg-white text-orange-600 shadow-md transform scale-[1.02]' : 'text-slate-500 hover:text-slate-700'}`}
+                      onClick={() => setCustomerMode('Daftar')}
+                    >Input dari Daftar</button>
+                    <button 
+                      className={`flex-1 py-2 text-sm font-bold rounded-lg transition-all duration-300 ${customerMode === 'Manual' ? 'bg-white text-orange-600 shadow-md transform scale-[1.02]' : 'text-slate-500 hover:text-slate-700'}`}
+                      onClick={() => setCustomerMode('Manual')}
+                    >Input Manual</button>
+                  </div>
+
+                  {customerMode === 'Daftar' ? (
+                    <div>
+                      <label className="text-xs text-slate-400 mb-1 block">Pilih Customer Sebelumnya</label>
+                      <select className="select-field w-full" value={selectedCustomer} onChange={e => setSelectedCustomer(e.target.value)}>
+                        <option value="">-- Pilih --</option>
+                        {customers.map(c => <option key={c} value={c}>{c}</option>)}
+                      </select>
+                    </div>
+                  ) : (
+                    <div>
+                      <label className="text-xs text-slate-400 mb-1 block">Nama Customer Baru</label>
+                      <input type="text" className="input-field w-full" placeholder="Ketik nama lengkap..." value={manualCustomer} onChange={e => setManualCustomer(e.target.value)} />
+                    </div>
+                  )}
+
+                  <div className="pt-2 border-t border-slate-200 mt-2">
+                    <label className="text-xs text-slate-400 mb-1 block">Nomor Nota (Bisa diedit jika melanjutkan nota lama)</label>
+                    <input type="text" className="input-field w-full font-mono text-blue-600" value={customNomorNota} onChange={e => setCustomNomorNota(e.target.value)} />
+                  </div>
+
+                  <div className="pt-2 border-t border-slate-200 mt-2">
+                    <label className="text-xs text-slate-400 mb-1 block">Keterangan Nota (opsional)</label>
+                    <input type="text" className="input-field w-full" placeholder="Ketik keterangan tambahan..." value={keteranganNota} onChange={e => setKeteranganNota(e.target.value)} />
+                  </div>
+                </>
               )}
-
-              <div className="pt-2 border-t border-slate-200 mt-2">
-                <label className="text-xs text-slate-400 mb-1 block">Nomor Nota (Bisa diedit jika melanjutkan nota lama)</label>
-                <input type="text" className="input-field w-full font-mono text-blue-600" value={customNomorNota} onChange={e => setCustomNomorNota(e.target.value)} />
-              </div>
-
-              <div className="pt-2 border-t border-slate-200 mt-2">
-                <label className="text-xs text-slate-400 mb-1 block">Keterangan Nota (opsional)</label>
-                <input type="text" className="input-field w-full" placeholder="Ketik keterangan tambahan..." value={keteranganNota} onChange={e => setKeteranganNota(e.target.value)} />
-              </div>
             </div>
 
             <div className="p-5 bg-slate-50 border-t border-slate-200 flex justify-end gap-3 rounded-b-3xl">
@@ -337,15 +430,21 @@ export default function TransaksiPenjualan({ parts, notas, onRefresh }) {
 
             {/* Body */}
             <div className="p-5 space-y-4">
-              <div className="grid grid-cols-2 gap-3">
-                <div className="bg-slate-50 rounded-xl p-3 border border-slate-100">
-                  <p className="text-xs text-slate-400 mb-1">Kategori</p>
-                  <span className="text-xs font-bold px-2 py-1 rounded-full bg-orange-100 text-orange-600">{detailPart.kategori}</span>
+              <div className="grid grid-cols-3 gap-2">
+                <div className="bg-slate-50 rounded-xl p-2.5 border border-slate-100">
+                  <p className="text-[10px] text-slate-400 mb-1">Kategori</p>
+                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-orange-100 text-orange-600 block text-center truncate">{detailPart.kategori}</span>
                 </div>
-                <div className="bg-slate-50 rounded-xl p-3 border border-slate-100">
-                  <p className="text-xs text-slate-400 mb-1">Stok Tersedia</p>
-                  <p className={`text-lg font-extrabold ${detailPart.stok === 0 ? 'text-red-500' : detailPart.stok < 5 ? 'text-amber-500' : 'text-emerald-600'}`}>
-                    {detailPart.stok} <span className="text-xs font-normal text-slate-400">unit</span>
+                <div className="bg-slate-50 rounded-xl p-2.5 border border-slate-100">
+                  <p className="text-[10px] text-slate-400 mb-1 font-medium">Tgl Masuk</p>
+                  <span className="text-xs font-bold text-slate-700 block text-center truncate">
+                    {detailPart.tanggalMasuk ? formatTanggalSingkat(detailPart.tanggalMasuk) : '-'}
+                  </span>
+                </div>
+                <div className="bg-slate-50 rounded-xl p-2.5 border border-slate-100">
+                  <p className="text-[10px] text-slate-400 mb-1">Stok</p>
+                  <p className={`text-sm font-extrabold text-center ${detailPart.stok === 0 ? 'text-red-500' : detailPart.stok < 5 ? 'text-amber-500' : 'text-emerald-600'}`}>
+                    {detailPart.stok} <span className="text-[10px] font-normal text-slate-400">unit</span>
                   </p>
                 </div>
               </div>

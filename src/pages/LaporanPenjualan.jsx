@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { BarChart2, Calendar, Filter, Trash2, Eye, ArrowLeft, TrendingUp, Settings, Package, FileSpreadsheet } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, Cell } from 'recharts';
 import { formatRupiah, formatTanggalSingkat, getTodayStr, getLast7Days, getDayLabel } from '../utils/helpers';
-import { deleteNota, KATEGORI_OPTIONS } from '../utils/storage';
+import { deleteNota, KATEGORI_OPTIONS, updateService, getKeuangan, deleteKeuanganItem } from '../utils/storage';
 
 export default function LaporanPenjualan({ notas, services = [], parts, onRefresh }) {
   const [startDate, setStartDate] = useState('');
@@ -13,36 +13,170 @@ export default function LaporanPenjualan({ notas, services = [], parts, onRefres
 
   const today = getTodayStr();
 
+  // Helper to scale items proportionally
+  const scaleItems = (itemsList, targetTotal, s) => {
+    if (!itemsList || itemsList.length === 0 || targetTotal <= 0) return [];
+    const sumOriginal = itemsList.reduce((sum, it) => sum + (it.subtotal || 0), 0);
+    if (sumOriginal <= 0) {
+      return [{
+        id: `scaled-fallback-${s.id}`,
+        partId: 'part-unknown',
+        deskripsi: `Suku Cadang Servis: ${s.jenis} ${s.merek}`,
+        qty: 1,
+        harga: targetTotal,
+        subtotal: targetTotal,
+        kategori: 'Sparepart'
+      }];
+    }
+    let currentSum = 0;
+    return itemsList.map((it, idx) => {
+      let sub = Math.round((it.subtotal / sumOriginal) * targetTotal);
+      if (idx === itemsList.length - 1) {
+        sub = targetTotal - currentSum;
+      }
+      currentSum += sub;
+      const qty = it.qty || 1;
+      return {
+        ...it,
+        id: it.id || `scaled-${s.id}-${it.partId || idx}`,
+        subtotal: sub,
+        harga: qty > 0 ? Math.round(sub / qty) : sub
+      };
+    });
+  };
+
   // 1. Combine Notas & Services
   const combinedTransactions = useMemo(() => {
-    const validServices = services
-      .filter(s => ['Berhasil Dikerjakan', 'Sudah Diambil'].includes(s.statusPengerjaan) && s.biaya > 0)
-      .map(s => {
-        const isLunas = s.statusPembayaran === 'Lunas' || !s.statusPembayaran;
-        const jumlahMasuk = isLunas ? s.biaya : (s.dibayar || 0);
-        return {
-          id: s.id,
-          nomorNota: s.noUrut,
-          tanggal: s.tanggalMasuk,
-          waktu: '-',
-          namaCustomer: s.pemilik,
-          namaAdmin: 'AGUS SUNARTO',
-          keterangan: `Servis: ${s.jenis} ${s.merek} [${isLunas ? 'Lunas' : 'Belum Lunas'}]`,
-          total: jumlahMasuk,
-          isService: true,
-          items: [{ 
-            id: s.id, 
-            partId: 'jasa-servis', 
-            deskripsi: `Jasa Servis & Barang: ${s.keluhan}`, 
-            qty: 1, 
-            harga: jumlahMasuk, 
-            subtotal: jumlahMasuk 
-          }]
-        };
-      })
-      .filter(s => s.total > 0);
+    const serviceEntries = [];
 
-    return [...notas, ...validServices];
+    services.forEach(s => {
+      if (s.statusPengerjaan !== 'Sudah Diambil' || !(s.biaya > 0)) return;
+
+      const isLunas = s.statusPembayaran === 'Lunas' || !s.statusPembayaran;
+      const totalPaid = isLunas ? s.biaya : (s.dibayar || 0);
+
+      if (totalPaid <= 0) return;
+
+      // Parse installment history
+      let installments = [];
+      try {
+        if (s.riwayatCicilan) {
+          installments = typeof s.riwayatCicilan === 'string'
+            ? JSON.parse(s.riwayatCicilan)
+            : s.riwayatCicilan;
+        }
+      } catch (e) {
+        installments = [];
+      }
+
+      const sumInstallments = installments.reduce((sum, item) => sum + (item.jumlah || 0), 0);
+      const initialPaymentAmount = totalPaid - sumInstallments;
+
+      // Parse items to get totalParts
+      let itemsList = [];
+      try {
+        if (s.items) {
+          itemsList = typeof s.items === 'string' ? JSON.parse(s.items) : s.items;
+        }
+      } catch (e) {
+        itemsList = [];
+      }
+      const totalParts = (itemsList || []).reduce((sum, item) => sum + (item.subtotal || 0), 0);
+      const ratioParts = s.biaya > 0 ? (totalParts / s.biaya) : 0;
+
+      const transDate = s.tanggalAmbil || s.tanggalMasuk;
+
+      // 1. Initial payment entry
+      if (initialPaymentAmount > 0) {
+        const partsPay = Math.round(initialPaymentAmount * ratioParts);
+        const jasaPay = initialPaymentAmount - partsPay;
+
+        if (jasaPay > 0) {
+          serviceEntries.push({
+            id: `srv-init-jasa-${s.id}`,
+            nomorNota: s.noUrut,
+            tanggal: transDate,
+            waktu: '-',
+            namaCustomer: s.pemilik,
+            namaAdmin: 'AGUS SUNARTO',
+            keterangan: `Jasa Servis: ${s.jenis} ${s.merek}` + (isLunas && sumInstallments === 0 ? ' [Lunas]' : ' [DP/Awal]'),
+            total: jasaPay,
+            isService: true,
+            items: [{ 
+              id: `${s.id}-init-jasa-item`, 
+              partId: 'jasa-servis', 
+              deskripsi: `Jasa Servis (${s.jenis} ${s.merek}): ${s.keluhan}`, 
+              qty: 1, 
+              harga: jasaPay, 
+              subtotal: jasaPay 
+            }]
+          });
+        }
+
+        if (partsPay > 0) {
+          const scaledPartsItems = scaleItems(itemsList, partsPay, s);
+          serviceEntries.push({
+            id: `srv-init-part-${s.id}`,
+            nomorNota: s.noUrut,
+            tanggal: transDate,
+            waktu: '-',
+            namaCustomer: s.pemilik,
+            namaAdmin: 'AGUS SUNARTO',
+            keterangan: `Penjualan Suku Cadang (Servis): ${s.jenis} ${s.merek}` + (isLunas && sumInstallments === 0 ? ' [Lunas]' : ' [DP/Awal]'),
+            total: partsPay,
+            isService: false,
+            items: scaledPartsItems
+          });
+        }
+      }
+
+      // 2. Installments entries
+      installments.forEach((inst, idx) => {
+        const instAmount = inst.jumlah || 0;
+        const partsPay = Math.round(instAmount * ratioParts);
+        const jasaPay = instAmount - partsPay;
+
+        if (jasaPay > 0) {
+          serviceEntries.push({
+            id: `srv-inst-jasa-${s.id}-${idx}`,
+            nomorNota: s.noUrut,
+            tanggal: inst.tanggal,
+            waktu: '-',
+            namaCustomer: s.pemilik,
+            namaAdmin: 'AGUS SUNARTO',
+            keterangan: `Cicilan Jasa Servis: ${inst.keterangan || `Cicilan ke-${idx + 1}`}`,
+            total: jasaPay,
+            isService: true,
+            items: [{ 
+              id: `${s.id}-inst-jasa-${idx}`, 
+              partId: 'jasa-servis', 
+              deskripsi: `Pembayaran Cicilan Jasa Servis (${s.jenis} ${s.merek})`, 
+              qty: 1, 
+              harga: jasaPay, 
+              subtotal: jasaPay 
+            }]
+          });
+        }
+
+        if (partsPay > 0) {
+          const scaledPartsItems = scaleItems(itemsList, partsPay, s);
+          serviceEntries.push({
+            id: `srv-inst-part-${s.id}-${idx}`,
+            nomorNota: s.noUrut,
+            tanggal: inst.tanggal,
+            waktu: '-',
+            namaCustomer: s.pemilik,
+            namaAdmin: 'AGUS SUNARTO',
+            keterangan: `Cicilan Penjualan Suku Cadang (Servis): ${inst.keterangan || `Cicilan ke-${idx + 1}`}`,
+            total: partsPay,
+            isService: false,
+            items: scaledPartsItems
+          });
+        }
+      });
+    });
+
+    return [...notas, ...serviceEntries];
   }, [notas, services]);
 
   // 2. Filtered Transactions
@@ -181,10 +315,79 @@ export default function LaporanPenjualan({ notas, services = [], parts, onRefres
   };
 
   const handleDelete = async (id, noNota, isService) => {
-    if (isService) {
-      alert('Transaksi ini adalah Jasa Servis. Untuk menghapusnya, silakan buka menu Data Servisan dan hapus dari sana.');
+    const idStr = id ? id.toString() : '';
+    const isInitialServiceTicket = idStr.startsWith('srv-init-');
+    if (isInitialServiceTicket) {
+      alert('Transaksi ini berasal dari Data Servisan (Pembayaran Utama/Awal). Untuk menghapusnya, silakan buka menu Data Servisan dan hapus/ubah status dari sana.');
       return;
     }
+
+    if (idStr.startsWith('srv-inst-')) {
+      const match = idStr.match(/^srv-inst-(jasa|part)-(.+)-(\d+)$/);
+      if (match) {
+        const serviceId = match[2];
+        const idx = parseInt(match[3], 10);
+        
+        const service = services.find(s => s.id === serviceId);
+        if (!service) {
+          alert('Data servisan tidak ditemukan.');
+          return;
+        }
+
+        let list = [];
+        try {
+          if (service.riwayatCicilan) {
+            list = typeof service.riwayatCicilan === 'string'
+              ? JSON.parse(service.riwayatCicilan)
+              : service.riwayatCicilan;
+          }
+        } catch (e) {
+          list = [];
+        }
+
+        const item = list[idx];
+        if (!item) {
+          alert('Data cicilan tidak ditemukan.');
+          return;
+        }
+
+        if (confirm(`Apakah Anda yakin ingin menghapus pembayaran cicilan sebesar ${formatRupiah(item.jumlah)} tanggal ${formatTanggalSingkat(item.tanggal)}?`)) {
+          const updatedList = list.filter((_, i) => i !== idx);
+          const newPaid = Math.max(0, (service.dibayar || 0) - item.jumlah);
+          const isPaidOff = newPaid === (service.biaya || 0);
+
+          const updates = {
+            dibayar: newPaid,
+            statusPembayaran: isPaidOff ? 'Lunas' : 'Belum Lunas / Cicilan',
+            riwayatCicilan: JSON.stringify(updatedList)
+          };
+
+          try {
+            await updateService(service.id, updates);
+
+            const keuanganList = await getKeuangan();
+            const matchingKeu = keuanganList.find(k => 
+              k.kode === service.noUrut && 
+              k.jumlah === item.jumlah && 
+              k.tanggal === item.tanggal &&
+              k.deskripsi && k.deskripsi.includes('Cicilan Servis:')
+            );
+
+            if (matchingKeu) {
+              await deleteKeuanganItem(matchingKeu.id);
+            }
+
+            if (onRefresh) await onRefresh();
+            alert('Pembayaran cicilan berhasil dihapus!');
+          } catch (err) {
+            console.error("Gagal menghapus cicilan:", err);
+            alert('Gagal menghapus cicilan: ' + err.message);
+          }
+        }
+      }
+      return;
+    }
+
     if (confirm(`Hapus nota ${noNota}? Aksi ini juga akan menghapus catatan keuangan terkait.`)) {
       await deleteNota(id);
       if (onRefresh) await onRefresh();
@@ -197,24 +400,70 @@ export default function LaporanPenjualan({ notas, services = [], parts, onRefres
   };
 
   if (viewMode === 'DetailNota' && selectedNota) {
+    const isServiceEntry = !!(selectedNota.id && (selectedNota.id.startsWith('srv-init-') || selectedNota.id.startsWith('srv-inst-')));
+    const matchingService = isServiceEntry ? services.find(s => s.noUrut === selectedNota.nomorNota) : null;
+    
+    let displayNota = selectedNota;
+    if (matchingService) {
+      let itemsList = [];
+      try {
+        if (matchingService.items) {
+          itemsList = typeof matchingService.items === 'string' ? JSON.parse(matchingService.items) : matchingService.items;
+        }
+      } catch (e) {
+        itemsList = [];
+      }
+      
+      const totalParts = itemsList.reduce((sum, item) => sum + (item.subtotal || 0), 0);
+      const jasaBiaya = Number(matchingService.biaya || 0) - totalParts;
+      
+      const reconstructedItems = [];
+      if (jasaBiaya > 0) {
+        reconstructedItems.push({
+          id: `reconstructed-jasa-${matchingService.id}`,
+          partId: 'jasa-servis',
+          deskripsi: `Jasa Servis (${matchingService.jenis || ''} ${matchingService.merek || ''}): ${matchingService.keluhan || ''}`,
+          qty: 1,
+          harga: jasaBiaya,
+          subtotal: jasaBiaya
+        });
+      }
+      
+      itemsList.forEach((it, idx) => {
+        reconstructedItems.push({
+          ...it,
+          id: it.id || `reconstructed-part-${matchingService.id}-${idx}`,
+          harga: it.harga || (it.qty > 0 ? Math.round(it.subtotal / it.qty) : it.subtotal),
+          subtotal: it.subtotal
+        });
+      });
+      
+      displayNota = {
+        ...selectedNota,
+        total: Number(matchingService.biaya || 0),
+        items: reconstructedItems,
+        isService: true
+      };
+    }
+
     return (
       <div className="fade-in-up space-y-4">
         <div className="flex items-center gap-4 mb-4">
           <button onClick={() => setViewMode('Laporan')} className="p-2 bg-white border border-slate-300 hover:bg-slate-50 rounded-lg text-slate-700">
             <ArrowLeft size={20} />
           </button>
-          <h1 className="text-xl font-bold text-slate-800">Detail Nota: <span className="text-orange-500">{selectedNota.nomorNota}</span></h1>
+          <h1 className="text-xl font-bold text-slate-800">Detail Nota: <span className="text-orange-500">{displayNota.nomorNota}</span></h1>
         </div>
 
         <div className="card p-6 max-w-3xl mx-auto">
           <div className="flex justify-between border-b border-slate-200 mb-4">
             <div>
               <p className="text-sm text-slate-500">Tanggal Transaksi</p>
-              <p className="font-semibold text-slate-700">{formatTanggalSingkat(selectedNota.tanggal)} - {selectedNota.waktu}</p>
+              <p className="font-semibold text-slate-700">{formatTanggalSingkat(displayNota.tanggal)} - {displayNota.waktu}</p>
             </div>
             <div className="text-right">
               <p className="text-sm text-slate-500">Customer</p>
-              <p className="font-semibold text-slate-700">{selectedNota.namaCustomer}</p>
+              <p className="font-semibold text-slate-700">{displayNota.namaCustomer}</p>
             </div>
           </div>
 
@@ -228,7 +477,7 @@ export default function LaporanPenjualan({ notas, services = [], parts, onRefres
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {selectedNota.items.map((item, i) => (
+              {displayNota.items.map((item, i) => (
                 <tr key={i}>
                   <td className="px-3 py-3 text-slate-700">
                     <div>{item.deskripsi}</div>
@@ -243,28 +492,89 @@ export default function LaporanPenjualan({ notas, services = [], parts, onRefres
             <tfoot>
               <tr className="border-t-2 border-slate-200">
                 <td colSpan={3} className="px-3 py-3 text-right font-bold text-slate-600">TOTAL:</td>
-                <td className="px-3 py-3 text-right font-bold text-emerald-600 text-lg">{formatRupiah(selectedNota.total)}</td>
+                <td className="px-3 py-3 text-right font-bold text-emerald-600 text-lg">{formatRupiah(displayNota.total)}</td>
               </tr>
             </tfoot>
           </table>
 
-          <div className="bg-slate-50 p-4 rounded-lg border border-slate-200 flex flex-wrap justify-between items-center gap-2">
+          <div className="bg-slate-50 p-4 rounded-lg border border-slate-200 flex flex-wrap justify-between items-center gap-2 mb-4">
             <div>
               <p className="text-xs text-slate-500 mb-0.5">Admin / Kasir:</p>
-              <p className="font-semibold text-slate-700">{selectedNota.namaAdmin}</p>
+              <p className="font-semibold text-slate-700">{displayNota.namaAdmin}</p>
             </div>
             <div className="text-right">
               <p className="text-[10px] text-slate-500 font-mono bg-white border border-slate-200 px-2 py-1 rounded shadow-sm flex items-center gap-1 select-all select-none">
                 <span>🔒 AGS SECURE VERIFIED:</span>
                 <span className="font-bold text-slate-800">
-                  {selectedNota.isService 
-                    ? btoa((selectedNota.nomorNota) + '|' + selectedNota.namaCustomer).substring(0, 16).toUpperCase()
-                    : btoa(selectedNota.nomorNota + '|' + selectedNota.total).substring(0, 16).toUpperCase()
+                  {displayNota.isService 
+                    ? btoa((displayNota.nomorNota) + '|' + displayNota.namaCustomer).substring(0, 16).toUpperCase()
+                    : btoa(displayNota.nomorNota + '|' + displayNota.total).substring(0, 16).toUpperCase()
                   }
                 </span>
               </p>
             </div>
           </div>
+
+          {matchingService && (
+            <div className="p-4 bg-orange-50/40 border border-orange-100/70 rounded-lg text-xs text-slate-600 space-y-2">
+              <p className="font-semibold text-slate-700 text-sm border-b border-orange-200/60 pb-1 flex items-center gap-1">
+                <span>ℹ️</span> Ringkasan Pembayaran Servis
+              </p>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                <div>
+                  <p className="text-slate-500">Total Biaya Servis</p>
+                  <p className="font-bold text-slate-800 text-sm">{formatRupiah(matchingService.biaya)}</p>
+                </div>
+                <div>
+                  <p className="text-slate-500">Total Sudah Dibayar</p>
+                  <p className="font-bold text-emerald-600 text-sm">{formatRupiah(matchingService.dibayar || matchingService.biaya)}</p>
+                </div>
+                <div>
+                  <p className="text-slate-500">Status Pembayaran</p>
+                  <span className={`inline-block px-2 py-0.5 font-semibold rounded text-[10px] ${
+                    matchingService.statusPembayaran === 'Lunas' 
+                      ? 'bg-emerald-100 text-emerald-800' 
+                      : 'bg-orange-100 text-orange-800'
+                  }`}>
+                    {matchingService.statusPembayaran || 'Lunas'}
+                  </span>
+                </div>
+              </div>
+              
+              {(() => {
+                let installments = [];
+                try {
+                  if (matchingService.riwayatCicilan) {
+                    installments = typeof matchingService.riwayatCicilan === 'string'
+                      ? JSON.parse(matchingService.riwayatCicilan)
+                      : matchingService.riwayatCicilan;
+                  }
+                } catch (e) {}
+                
+                if (installments && installments.length > 0) {
+                  const initialPayment = Number(matchingService.dibayar || matchingService.biaya) - installments.reduce((sum, item) => sum + (item.jumlah || 0), 0);
+                  return (
+                    <div className="mt-2 pt-2 border-t border-dashed border-orange-200">
+                      <p className="font-semibold text-slate-700 mb-1">Detail Alur Pembayaran:</p>
+                      <div className="space-y-1">
+                        <div className="flex justify-between text-[11px] text-slate-600">
+                          <span>• DP / Pembayaran Awal ({formatTanggalSingkat(matchingService.tanggalAmbil || matchingService.tanggalMasuk)}):</span>
+                          <span className="font-semibold">{formatRupiah(initialPayment)}</span>
+                        </div>
+                        {installments.map((inst, idx) => (
+                          <div key={idx} className="flex justify-between text-[11px] text-slate-600">
+                            <span>• {inst.keterangan || `Cicilan ke-${idx + 1}`} ({formatTanggalSingkat(inst.tanggal)}):</span>
+                            <span className="font-semibold">{formatRupiah(inst.jumlah)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                }
+                return null;
+              })()}
+            </div>
+          )}
         </div>
       </div>
     );

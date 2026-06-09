@@ -1,9 +1,10 @@
 import React, { useState, useMemo, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { 
   BookOpen, Search, DollarSign, Users, ChevronRight, 
-  PlusCircle, Calendar, FileText, CheckCircle2, X, Printer, RefreshCw
+  PlusCircle, Calendar, FileText, CheckCircle2, X, Printer, RefreshCw, Trash2
 } from 'lucide-react';
-import { getServices, updateService, addKeuanganItem, getSettings } from '../utils/storage';
+import { getServices, updateService, addKeuanganItem, getSettings, getKeuangan, deleteKeuanganItem } from '../utils/storage';
 import { formatRupiah, formatTanggalSingkat, getTodayStr } from '../utils/helpers';
 
 export default function BukuHutang({ onRefresh }) {
@@ -172,6 +173,66 @@ export default function BukuHutang({ onRefresh }) {
 
   const handlePrintAction = () => {
     setTimeout(() => { window.print(); }, 200);
+  };
+
+  const handleDeleteInstallment = async (service, idx) => {
+    let list = [];
+    try {
+      if (service.riwayatCicilan) {
+        list = typeof service.riwayatCicilan === 'string'
+          ? JSON.parse(service.riwayatCicilan)
+          : service.riwayatCicilan;
+      }
+    } catch (e) {
+      list = [];
+    }
+
+    const item = list[idx];
+    if (!item) return;
+
+    if (confirm(`Apakah Anda yakin ingin menghapus pembayaran cicilan sebesar ${formatRupiah(item.jumlah)} tanggal ${formatTanggalSingkat(item.tanggal)}?`)) {
+      const updatedList = list.filter((_, i) => i !== idx);
+      const newPaid = Math.max(0, (service.dibayar || 0) - item.jumlah);
+      const isPaidOff = newPaid === (service.biaya || 0);
+
+      const updates = {
+        dibayar: newPaid,
+        statusPembayaran: isPaidOff ? 'Lunas' : 'Belum Lunas / Cicilan',
+        riwayatCicilan: JSON.stringify(updatedList)
+      };
+
+      try {
+        // 1. Update service record
+        await updateService(service.id, updates);
+
+        // 2. Delete corresponding entry in keuangan table (best-effort)
+        const keuanganList = await getKeuangan();
+        const matchingKeu = keuanganList.find(k => 
+          k.kode === service.noUrut && 
+          k.jumlah === item.jumlah && 
+          k.tanggal === item.tanggal &&
+          k.deskripsi && k.deskripsi.includes('Cicilan Servis:')
+        );
+
+        if (matchingKeu) {
+          await deleteKeuanganItem(matchingKeu.id);
+        }
+
+        // 3. Reset states & refresh
+        await fetchLocal();
+        if (onRefresh) await onRefresh();
+        
+        // Keep selected service reference updated
+        const freshServices = await getServices();
+        const freshCurrent = freshServices.find(s => s.id === service.id);
+        setSelectedService(freshCurrent || null);
+
+        alert('Pembayaran cicilan berhasil dihapus!');
+      } catch (err) {
+        console.error(err);
+        alert('Gagal menghapus cicilan: ' + err.message);
+      }
+    }
   };
 
   return (
@@ -395,13 +456,22 @@ export default function BukuHutang({ onRefresh }) {
                             <p className="font-bold text-slate-700">{formatRupiah(item.jumlah)}</p>
                             <p className="text-[10px] text-slate-500">{item.keterangan}</p>
                           </div>
-                          <button 
-                            onClick={() => handleOpenPrint(selectedService, idx)}
-                            className="p-1.5 bg-white hover:bg-blue-50 text-slate-500 hover:text-blue-600 rounded-lg border border-slate-200 transition-colors shadow-sm cursor-pointer"
-                            title="Cetak Bukti Pembayaran"
-                          >
-                            <Printer size={13} />
-                          </button>
+                          <div className="flex items-center gap-1.5">
+                            <button 
+                              onClick={() => handleOpenPrint(selectedService, idx)}
+                              className="p-1.5 bg-white hover:bg-blue-50 text-slate-500 hover:text-blue-600 rounded-lg border border-slate-200 transition-colors shadow-sm cursor-pointer"
+                              title="Cetak Bukti Pembayaran"
+                            >
+                              <Printer size={13} />
+                            </button>
+                            <button 
+                              onClick={() => handleDeleteInstallment(selectedService, idx)}
+                              className="p-1.5 bg-white hover:bg-red-50 text-slate-400 hover:text-red-500 rounded-lg border border-slate-200 transition-colors shadow-sm cursor-pointer"
+                              title="Hapus Pembayaran"
+                            >
+                              <Trash2 size={13} />
+                            </button>
+                          </div>
                         </div>
                       ))}
                     </div>
@@ -509,7 +579,7 @@ export default function BukuHutang({ onRefresh }) {
       )}
 
       {/* Modal: Cetak Bukti Cicilan */}
-      {showPrintModal && selectedService && selectedPaymentIndex >= 0 && (
+      {showPrintModal && selectedService && selectedPaymentIndex >= 0 && createPortal(
         <div className="fixed inset-0 bg-slate-50/98 z-50 overflow-y-auto flex flex-col print-container font-sans text-black">
           {/* Control Panel */}
           <div className="no-print bg-white p-4 flex justify-between items-center sticky top-0 z-10 shadow-sm border-b border-slate-200">
@@ -646,7 +716,8 @@ export default function BukuHutang({ onRefresh }) {
               @page { size: 58mm auto; margin: 0 !important; }
             }
           `}} />
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

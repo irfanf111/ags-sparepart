@@ -91,7 +91,12 @@ export default function Pengaturan({ onRefresh }) {
           keuangan: JSON.parse(localStorage.getItem('ags_keuangan') || '[]'),
           services: JSON.parse(localStorage.getItem('ags_services') || '[]'),
           settings: JSON.parse(localStorage.getItem('ags_settings') || '{}'),
-          backupVersion: APP_VERSION || '8.6.2',
+          // Comprehensive custom UI settings
+          customMarkupTiers: JSON.parse(localStorage.getItem('ags_custom_markup_tiers') || 'null'),
+          isCustomMarkup: localStorage.getItem('ags_is_custom_markup'),
+          hiddenKeuanganIds: JSON.parse(localStorage.getItem('ags_hidden_keuangan_ids') || '[]'),
+          zoomLevel: localStorage.getItem('ags_zoom_level'),
+          backupVersion: APP_VERSION || '1.0.0',
           backupTime: new Date().toISOString()
         };
         const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(backupData, null, 2));
@@ -155,6 +160,11 @@ export default function Pengaturan({ onRefresh }) {
               if (parsed.keuangan) localStorage.setItem('ags_keuangan', JSON.stringify(parsed.keuangan));
               if (parsed.services) localStorage.setItem('ags_services', JSON.stringify(parsed.services));
               if (parsed.settings) localStorage.setItem('ags_settings', JSON.stringify(parsed.settings));
+              
+              if (parsed.customMarkupTiers) localStorage.setItem('ags_custom_markup_tiers', JSON.stringify(parsed.customMarkupTiers));
+              if (parsed.isCustomMarkup !== undefined && parsed.isCustomMarkup !== null) localStorage.setItem('ags_is_custom_markup', String(parsed.isCustomMarkup));
+              if (parsed.hiddenKeuanganIds) localStorage.setItem('ags_hidden_keuangan_ids', JSON.stringify(parsed.hiddenKeuanganIds));
+              if (parsed.zoomLevel !== undefined && parsed.zoomLevel !== null) localStorage.setItem('ags_zoom_level', String(parsed.zoomLevel));
               
               setSuccessMsg('Database berhasil dipulihkan dari file JSON! Memuat ulang halaman...');
               if (onRefresh) await onRefresh();
@@ -701,7 +711,7 @@ THERMAL-PASTA;Accessories;THERMAL GRAPHYTE PASTA;35000;20;Premium Grey`;
               
               <div className="space-y-4 my-auto relative z-10">
                 <div className="w-24 h-24 mx-auto flex items-center justify-center p-2 rounded-2xl bg-white/5 border border-white/10 shadow-lg backdrop-blur-md">
-                  <img src="logo.png" alt="Logo AGS" className="max-w-full max-h-full object-contain filter drop-shadow-[0_0_12px_rgba(249,115,22,0.5)]" />
+                  <img src="logo_app.png" alt="Logo AGS" className="max-w-full max-h-full object-contain filter drop-shadow-[0_0_12px_rgba(249,115,22,0.5)]" />
                 </div>
                 <div>
                   <h2 className="text-lg font-bold tracking-wide text-white leading-tight">AGS Techflow</h2>

@@ -4,7 +4,7 @@ import {
   Trash2, FileSpreadsheet, X, Check, Calendar, Search, TrendingUp, DollarSign
 } from 'lucide-react';
 import { formatRupiah, formatTanggalSingkat, getTodayStr } from '../utils/helpers';
-import { addKeuanganItem, deleteKeuanganItem } from '../utils/storage';
+import { addKeuanganItem, deleteKeuanganItem, saveSetting, updateService, getKeuangan, getServices } from '../utils/storage';
 
 export default function CatatanKeuangan({ keuangan = [], services = [], onRefresh }) {
   const [search, setSearch] = useState('');
@@ -15,7 +15,13 @@ export default function CatatanKeuangan({ keuangan = [], services = [], onRefres
   const [hiddenIds, setHiddenIds] = useState(() => {
     try {
       const saved = localStorage.getItem('ags_hidden_keuangan_ids');
-      return saved ? JSON.parse(saved) : [];
+      const parsed = saved ? JSON.parse(saved) : [];
+      // Clean up any service-linked IDs that start with 'keu-srv-' or 'srv-'
+      const cleaned = parsed.filter(id => id && !id.toString().startsWith('keu-srv-') && !id.toString().startsWith('srv-'));
+      if (cleaned.length !== parsed.length) {
+        localStorage.setItem('ags_hidden_keuangan_ids', JSON.stringify(cleaned));
+      }
+      return cleaned;
     } catch {
       return [];
     }
@@ -28,6 +34,7 @@ export default function CatatanKeuangan({ keuangan = [], services = [], onRefres
     const updated = [...new Set([...hiddenIds, ...ids])];
     setHiddenIds(updated);
     localStorage.setItem('ags_hidden_keuangan_ids', JSON.stringify(updated));
+    saveSetting('ags_hidden_keuangan_ids', JSON.stringify(updated));
   };
 
   // New transaction state
@@ -41,24 +48,121 @@ export default function CatatanKeuangan({ keuangan = [], services = [], onRefres
 
   // Combine automatic service records with SQLite keuangan records
   const combinedKeuangan = useMemo(() => {
-    const validServices = services
-      .filter(s => ['Berhasil Dikerjakan', 'Sudah Diambil'].includes(s.statusPengerjaan) && s.biaya > 0)
-      .map(s => {
-        const isLunas = s.statusPembayaran === 'Lunas' || !s.statusPembayaran;
-        const jumlahMasuk = isLunas ? s.biaya : (s.dibayar || 0);
-        return {
-          id: `keu-srv-${s.id}`,
-          tanggal: s.tanggalMasuk,
-          tipe: 'Pemasukan',
-          kode: s.noUrut,
-          deskripsi: `Dari Jasa Servis: ${s.jenis} ${s.merek} (${s.pemilik}) [${isLunas ? 'Lunas' : 'Belum Lunas'}]`,
-          jumlah: jumlahMasuk,
-        };
-      })
-      .filter(item => item.jumlah > 0);
-    
+    const serviceEntries = [];
+    const serviceCodes = new Set();
+
+    services.forEach(s => {
+      if (s.noUrut) {
+        serviceCodes.add(s.noUrut);
+      }
+
+      if (s.statusPengerjaan !== 'Sudah Diambil' || !(s.biaya > 0)) return;
+
+      const isLunas = s.statusPembayaran === 'Lunas' || !s.statusPembayaran;
+      const totalPaid = isLunas ? s.biaya : (s.dibayar || 0);
+
+      if (totalPaid <= 0) return;
+
+      // Parse installment history
+      let installments = [];
+      try {
+        if (s.riwayatCicilan) {
+          installments = typeof s.riwayatCicilan === 'string'
+            ? JSON.parse(s.riwayatCicilan)
+            : s.riwayatCicilan;
+        }
+      } catch (e) {
+        installments = [];
+      }
+
+      const sumInstallments = installments.reduce((sum, item) => sum + (item.jumlah || 0), 0);
+      const initialPaymentAmount = totalPaid - sumInstallments;
+
+      // Parse items to get totalParts
+      let itemsList = [];
+      try {
+        if (s.items) {
+          itemsList = typeof s.items === 'string' ? JSON.parse(s.items) : s.items;
+        }
+      } catch (e) {
+        itemsList = [];
+      }
+      const totalParts = (itemsList || []).reduce((sum, item) => sum + (item.subtotal || 0), 0);
+      const ratioParts = s.biaya > 0 ? (totalParts / s.biaya) : 0;
+
+      const transDate = s.tanggalAmbil || s.tanggalMasuk;
+
+      // 1. Initial payment (DP or payment on pickup) on transDate
+      if (initialPaymentAmount > 0) {
+        const partsPay = Math.round(initialPaymentAmount * ratioParts);
+        const jasaPay = initialPaymentAmount - partsPay;
+
+        if (jasaPay > 0) {
+          const descJasa = isLunas && sumInstallments === 0
+            ? `Pemasukan Jasa Servis: ${s.jenis} ${s.merek} (${s.pemilik}) [Lunas]`
+            : `Pemasukan Jasa Servis: ${s.jenis} ${s.merek} (${s.pemilik}) [DP/Awal]`;
+
+          serviceEntries.push({
+            id: `keu-srv-init-jasa-${s.id}`,
+            tanggal: transDate,
+            tipe: 'Pemasukan',
+            kode: s.noUrut,
+            deskripsi: descJasa,
+            jumlah: jasaPay,
+          });
+        }
+
+        if (partsPay > 0) {
+          const descParts = isLunas && sumInstallments === 0
+            ? `Penjualan Suku Cadang (Servis): ${s.jenis} ${s.merek} (${s.pemilik}) [Lunas]`
+            : `Penjualan Suku Cadang (Servis): ${s.jenis} ${s.merek} (${s.pemilik}) [DP/Awal]`;
+
+          serviceEntries.push({
+            id: `keu-srv-init-part-${s.id}`,
+            tanggal: transDate,
+            tipe: 'Pemasukan',
+            kode: s.noUrut,
+            deskripsi: descParts,
+            jumlah: partsPay,
+          });
+        }
+      }
+
+      // 2. Installment payments on their respective dates
+      installments.forEach((inst, idx) => {
+        const instAmount = inst.jumlah || 0;
+        const partsPay = Math.round(instAmount * ratioParts);
+        const jasaPay = instAmount - partsPay;
+
+        if (jasaPay > 0) {
+          serviceEntries.push({
+            id: `keu-srv-inst-jasa-${s.id}-${idx}`,
+            tanggal: inst.tanggal,
+            tipe: 'Pemasukan',
+            kode: s.noUrut,
+            deskripsi: `Cicilan Jasa Servis: ${s.pemilik} (${inst.keterangan || `Cicilan ke-${idx + 1}`})`,
+            jumlah: jasaPay,
+          });
+        }
+
+        if (partsPay > 0) {
+          serviceEntries.push({
+            id: `keu-srv-inst-part-${s.id}-${idx}`,
+            tanggal: inst.tanggal,
+            tipe: 'Pemasukan',
+            kode: s.noUrut,
+            deskripsi: `Cicilan Suku Cadang (Servis): ${s.pemilik} (${inst.keterangan || `Cicilan ke-${idx + 1}`})`,
+            jumlah: partsPay,
+          });
+        }
+      });
+    });
+
     const hiddenSet = new Set(hiddenIds);
-    return [...keuangan, ...validServices].filter(k => !hiddenSet.has(k.id));
+    // Filter out SQLite keuangan records that represent service installments to prevent duplicate/double counting in React
+    const filteredKeuangan = keuangan.filter(k => !(k.deskripsi && k.deskripsi.startsWith('Cicilan Servis:')));
+    
+    return [...filteredKeuangan, ...serviceEntries].filter(k => !hiddenSet.has(k.id));
   }, [keuangan, services, hiddenIds]);
 
   // Filters search
@@ -192,6 +296,87 @@ export default function CatatanKeuangan({ keuangan = [], services = [], onRefres
   };
 
   const handleDeleteSingle = async (id, isManual, desc) => {
+    const idStr = id ? id.toString() : '';
+    
+    // Check if it's an installment
+    if (idStr.startsWith('keu-srv-inst-') || idStr.startsWith('srv-inst-')) {
+      const match = idStr.match(/^(?:keu-)?srv-inst-(jasa|part)-(.+)-(\d+)$/);
+      if (match) {
+        const serviceId = match[2];
+        const idx = parseInt(match[3], 10);
+
+        const service = services.find(s => s.id === serviceId);
+        if (!service) {
+          alert('Data servisan tidak ditemukan.');
+          return;
+        }
+
+        let list = [];
+        try {
+          if (service.riwayatCicilan) {
+            list = typeof service.riwayatCicilan === 'string'
+              ? JSON.parse(service.riwayatCicilan)
+              : service.riwayatCicilan;
+          }
+        } catch (e) {
+          list = [];
+        }
+
+        const item = list[idx];
+        if (!item) {
+          alert('Data cicilan tidak ditemukan.');
+          return;
+        }
+
+        if (confirm(`Apakah Anda yakin ingin menghapus pembayaran cicilan sebesar ${formatRupiah(item.jumlah)} tanggal ${formatTanggalSingkat(item.tanggal)}?`)) {
+          const updatedList = list.filter((_, i) => i !== idx);
+          const newPaid = Math.max(0, (service.dibayar || 0) - item.jumlah);
+          const isPaidOff = newPaid === (service.biaya || 0);
+
+          const updates = {
+            dibayar: newPaid,
+            statusPembayaran: isPaidOff ? 'Lunas' : 'Belum Lunas / Cicilan',
+            riwayatCicilan: JSON.stringify(updatedList)
+          };
+
+          try {
+            await updateService(service.id, updates);
+
+            const keuanganList = await getKeuangan();
+            const matchingKeu = keuanganList.find(k => 
+              k.kode === service.noUrut && 
+              k.jumlah === item.jumlah && 
+              k.tanggal === item.tanggal &&
+              k.deskripsi && k.deskripsi.includes('Cicilan Servis:')
+            );
+
+            if (matchingKeu) {
+              await deleteKeuanganItem(matchingKeu.id);
+            }
+
+            hideTransactionIds([id]);
+            setSelectedIds(prev => {
+              const next = new Set(prev);
+              next.delete(id);
+              return next;
+            });
+            if (onRefresh) await onRefresh();
+            alert('Pembayaran cicilan berhasil dihapus!');
+          } catch (err) {
+            console.error("Gagal menghapus cicilan:", err);
+            alert('Gagal menghapus cicilan: ' + err.message);
+          }
+        }
+        return;
+      }
+    }
+
+    const isServiceTicket = idStr.startsWith('keu-srv-') || idStr.startsWith('srv-');
+    if (isServiceTicket) {
+      alert('Transaksi ini berasal dari Data Servisan (Pembayaran Utama/Awal). Untuk menghapusnya, silakan buka menu Data Servisan dan hapus/ubah status dari sana.');
+      return;
+    }
+
     if (confirm(`Hapus catatan keuangan "${desc}"?`)) {
       if (isManual) {
         try {
@@ -212,18 +397,80 @@ export default function CatatanKeuangan({ keuangan = [], services = [], onRefres
 
   const handleDeleteSelected = async () => {
     if (selectedIds.size === 0) return;
+    const selectedIdsArray = Array.from(selectedIds);
+    const hasInitialServiceIds = selectedIdsArray.some(id => {
+      const idStr = id ? id.toString() : '';
+      return (idStr.startsWith('keu-srv-') || idStr.startsWith('srv-')) && 
+             !idStr.includes('-inst-');
+    });
+
+    if (hasInitialServiceIds) {
+      alert('Beberapa transaksi terpilih berasal dari Data Servisan (Pembayaran Utama/Awal) dan tidak dapat dihapus dari sini.');
+      return;
+    }
+
     if (confirm(`Hapus ${selectedIds.size} catatan keuangan terpilih?`)) {
       try {
         const idsArray = Array.from(selectedIds);
         for (const id of idsArray) {
-          const isManual = id.toString().startsWith('keu-man-');
+          const idStr = id.toString();
+          const isManual = idStr.startsWith('keu-man-');
           if (isManual) {
             await deleteKeuanganItem(id);
+          } else if (idStr.startsWith('keu-srv-inst-') || idStr.startsWith('srv-inst-')) {
+            const match = idStr.match(/^(?:keu-)?srv-inst-(jasa|part)-(.+)-(\d+)$/);
+            if (match) {
+              const serviceId = match[2];
+              const idx = parseInt(match[3], 10);
+              
+              const freshServices = await getServices();
+              const service = freshServices.find(s => s.id === serviceId);
+              if (service) {
+                let list = [];
+                try {
+                  if (service.riwayatCicilan) {
+                    list = typeof service.riwayatCicilan === 'string'
+                      ? JSON.parse(service.riwayatCicilan)
+                      : service.riwayatCicilan;
+                  }
+                } catch (e) {
+                  list = [];
+                }
+
+                const item = list[idx];
+                if (item) {
+                  const updatedList = list.filter((_, i) => i !== idx);
+                  const newPaid = Math.max(0, (service.dibayar || 0) - item.jumlah);
+                  const isPaidOff = newPaid === (service.biaya || 0);
+
+                  const updates = {
+                    dibayar: newPaid,
+                    statusPembayaran: isPaidOff ? 'Lunas' : 'Belum Lunas / Cicilan',
+                    riwayatCicilan: JSON.stringify(updatedList)
+                  };
+
+                  await updateService(service.id, updates);
+
+                  const keuanganList = await getKeuangan();
+                  const matchingKeu = keuanganList.find(k => 
+                    k.kode === service.noUrut && 
+                    k.jumlah === item.jumlah && 
+                    k.tanggal === item.tanggal &&
+                    k.deskripsi && k.deskripsi.includes('Cicilan Servis:')
+                  );
+
+                  if (matchingKeu) {
+                    await deleteKeuanganItem(matchingKeu.id);
+                  }
+                }
+              }
+            }
           }
         }
         hideTransactionIds(idsArray);
         setSelectedIds(new Set());
         if (onRefresh) await onRefresh();
+        alert('Item terpilih berhasil dihapus!');
       } catch (err) {
         alert('Gagal menghapus beberapa item: ' + err.message);
       }
@@ -550,11 +797,14 @@ export default function CatatanKeuangan({ keuangan = [], services = [], onRefres
                 <div className="relative">
                   <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-slate-400 font-bold text-xs">Rp</span>
                   <input 
-                    type="number" 
-                    placeholder="Nominal uang, misal: 150000" 
+                    type="text" 
+                    placeholder="Nominal uang, misal: 150.000" 
                     className="input-field pl-9 font-semibold"
-                    value={newTrans.jumlah} 
-                    onChange={e => setNewTrans(prev => ({ ...prev, jumlah: e.target.value }))}
+                    value={newTrans.jumlah ? newTrans.jumlah.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".") : ''} 
+                    onChange={e => {
+                      const val = e.target.value.replace(/\D/g, '');
+                      setNewTrans(prev => ({ ...prev, jumlah: val }));
+                    }}
                     required
                   />
                 </div>

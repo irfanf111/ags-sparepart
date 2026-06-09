@@ -35,20 +35,54 @@ export default function Dashboard({ spareparts = [], notas = [], services = [] }
     const todayNotas = notas.filter(n => n.tanggal === today);
     const todayNotasTotal = todayNotas.reduce((sum, n) => sum + n.total, 0);
 
-    // Servis yang status/pembayaran diperbarui, dan sudah bayar, dan memiliki biaya
-    const todayServices = services.filter(s => 
-      ['Berhasil Dikerjakan', 'Sudah Diambil'].includes(s.statusPengerjaan) && 
-      s.biaya > 0
-    );
-    const todayServicesTotal = todayServices.reduce((sum, s) => {
+    let todayServicesTotal = 0;
+    let todayServicesCount = 0;
+
+    services.forEach(s => {
+      if (s.statusPengerjaan !== 'Sudah Diambil' || !(s.biaya > 0)) return;
+
       const isLunas = s.statusPembayaran === 'Lunas' || !s.statusPembayaran;
-      const jumlahMasuk = isLunas ? s.biaya : (s.dibayar || 0);
-      return sum + jumlahMasuk;
-    }, 0);
+      const totalPaid = isLunas ? s.biaya : (s.dibayar || 0);
+
+      if (totalPaid <= 0) return;
+
+      // Parse installments
+      let installments = [];
+      try {
+        if (s.riwayatCicilan) {
+          installments = typeof s.riwayatCicilan === 'string'
+            ? JSON.parse(s.riwayatCicilan)
+            : s.riwayatCicilan;
+        }
+      } catch (e) {
+        installments = [];
+      }
+
+      const sumInstallments = installments.reduce((sum, item) => sum + (item.jumlah || 0), 0);
+      const initialPaymentAmount = totalPaid - sumInstallments;
+
+      // Check initial payment date
+      if (initialPaymentAmount > 0) {
+        const tanggalInit = s.tanggalAmbil || s.tanggalMasuk;
+        if (tanggalInit === today) {
+          todayServicesTotal += initialPaymentAmount;
+          todayServicesCount++;
+        }
+      }
+
+      // Check installment dates
+      installments.forEach(inst => {
+        if (inst.tanggal === today) {
+          todayServicesTotal += inst.jumlah;
+          todayServicesCount++;
+        }
+      });
+    });
+
     const pemasukanHariIni = todayNotasTotal + todayServicesTotal;
 
     // 2. Transaksi Hari Ini
-    const transaksiHariIni = todayNotas.length + todayServices.length;
+    const transaksiHariIni = todayNotas.length + todayServicesCount;
 
     // 3. Antrean Servis Aktif (Proses Pengerjaan)
     const antreanServis = services.filter(s => s.statusPengerjaan === 'Proses Pengerjaan').length;

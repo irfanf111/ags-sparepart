@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, Calculator, RotateCcw, Check } from 'lucide-react';
 import { formatRupiah } from '../utils/helpers';
+import { saveSetting } from '../utils/storage';
 
 const DEFAULT_TIERS = [
   { min: 0, max: 10000, label: '0 - 10rb', value: 150 },
@@ -49,6 +50,7 @@ export default function KalkulatorMarkup({ isOpen, onClose, onApply }) {
   // Persist scheme
   useEffect(() => {
     localStorage.setItem('ags_is_custom_markup', isCustomScheme.toString());
+    saveSetting('ags_is_custom_markup', isCustomScheme.toString());
   }, [isCustomScheme]);
 
   if (!isOpen) return null;
@@ -82,6 +84,7 @@ export default function KalkulatorMarkup({ isOpen, onClose, onApply }) {
   const handleApplyCustom = () => {
     setTiers(tempTiers);
     localStorage.setItem('ags_custom_markup_tiers', JSON.stringify(tempTiers));
+    saveSetting('ags_custom_markup_tiers', JSON.stringify(tempTiers));
   };
 
   const handleResetToDefault = () => {
@@ -89,6 +92,7 @@ export default function KalkulatorMarkup({ isOpen, onClose, onApply }) {
     setTiers(defaults);
     setTempTiers(defaults);
     localStorage.setItem('ags_custom_markup_tiers', JSON.stringify(defaults));
+    saveSetting('ags_custom_markup_tiers', JSON.stringify(defaults));
   };
 
   return (

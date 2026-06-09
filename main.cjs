@@ -45,7 +45,8 @@ async function initDB() {
       deskripsi TEXT,
       harga INTEGER,
       stok INTEGER,
-      keterangan TEXT
+      keterangan TEXT,
+      tanggalMasuk TEXT
     );
     CREATE TABLE IF NOT EXISTS notas (
       id TEXT PRIMARY KEY,
@@ -98,7 +99,10 @@ async function initDB() {
       biaya INTEGER,
       dibayar INTEGER,
       riwayatCicilan TEXT,
-      catatanTeknisi TEXT
+      catatanTeknisi TEXT,
+      tanggalAmbil TEXT,
+      items TEXT,
+      jasaPasang INTEGER
     );
     CREATE TABLE IF NOT EXISTS customers (
       name TEXT PRIMARY KEY
@@ -114,36 +118,32 @@ async function initDB() {
     INSERT OR IGNORE INTO settings (key, value) VALUES ('pesan_kaki_nota', 'Terima kasih telah mempercayakan kendaraan Anda kepada kami!');
   `);
 
-  // Migration: Ensure serialNumber exists (for existing databases)
-  try {
-    db.run("ALTER TABLE services ADD COLUMN serialNumber TEXT;");
-  } catch (e) { /* ignore if already exists */ }
-  
-  try {
-    db.run("ALTER TABLE services ADD COLUMN noHp TEXT;");
-  } catch (e) { /* ignore if already exists */ }
-
-  try {
-    db.run("ALTER TABLE services ADD COLUMN dibayar INTEGER;");
-  } catch (e) { /* ignore if already exists */ }
-
-  try {
-    db.run("ALTER TABLE services ADD COLUMN riwayatCicilan TEXT;");
-  } catch (e) { /* ignore if already exists */ }
-
-  try {
-    db.run("ALTER TABLE suppliers ADD COLUMN tipeKemitraan TEXT;");
-  } catch (e) { /* ignore if already exists */ }
-
-  try {
-    db.run("ALTER TABLE suppliers ADD COLUMN status TEXT;");
-  } catch (e) { /* ignore if already exists */ }
-
-  try {
-    db.run("ALTER TABLE suppliers ADD COLUMN kontrak TEXT;");
-  } catch (e) { /* ignore if already exists */ }
-
+  // Migration: Ensure latest columns exist for existing databases
+  runMigrations(db);
   saveDb();
+}
+
+function runMigrations(dbInstance) {
+  const migrations = [
+    "ALTER TABLE spareparts ADD COLUMN tanggalMasuk TEXT;",
+    "ALTER TABLE services ADD COLUMN serialNumber TEXT;",
+    "ALTER TABLE services ADD COLUMN noHp TEXT;",
+    "ALTER TABLE services ADD COLUMN dibayar INTEGER;",
+    "ALTER TABLE services ADD COLUMN riwayatCicilan TEXT;",
+    "ALTER TABLE services ADD COLUMN tanggalAmbil TEXT;",
+    "ALTER TABLE services ADD COLUMN items TEXT;",
+    "ALTER TABLE services ADD COLUMN jasaPasang INTEGER;",
+    "ALTER TABLE suppliers ADD COLUMN tipeKemitraan TEXT;",
+    "ALTER TABLE suppliers ADD COLUMN status TEXT;",
+    "ALTER TABLE suppliers ADD COLUMN kontrak TEXT;"
+  ];
+  for (const query of migrations) {
+    try {
+      dbInstance.run(query);
+    } catch (e) {
+      // ignore duplicate column errors
+    }
+  }
 }
 
 function saveDb() {
@@ -320,12 +320,12 @@ ipcMain.handle('db-call', async (event, { table, action, data, id }) => {
           db.run(`DELETE FROM ${t}`);
         });
         
-        if (data.parts) data.parts.forEach(p => db.run('INSERT INTO spareparts (id, kode, kategori, deskripsi, harga, stok, keterangan) VALUES (?, ?, ?, ?, ?, ?, ?)', [p.id, p.kode, p.kategori, p.deskripsi, p.harga, p.stok, p.keterangan]));
+        if (data.parts) data.parts.forEach(p => db.run('INSERT INTO spareparts (id, kode, kategori, deskripsi, harga, stok, keterangan, tanggalMasuk) VALUES (?, ?, ?, ?, ?, ?, ?, ?)', [p.id, p.kode, p.kategori, p.deskripsi, p.harga, p.stok, p.keterangan, p.tanggalMasuk || '']));
         if (data.notas) data.notas.forEach(n => db.run('INSERT INTO notas (id, nomorNota, tanggal, waktu, namaCustomer, namaAdmin, keterangan, items, total, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', [n.id, n.nomorNota, n.tanggal, n.waktu, n.namaCustomer, n.namaAdmin, n.keterangan, JSON.stringify(n.items), n.total, n.createdAt]));
         if (data.suppliers) data.suppliers.forEach(s => db.run('INSERT INTO suppliers (id, namaToko, pemilik, telp, whatsapp, facebook, tokopedia, bukalapak, shopee, info) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', [s.id, s.namaToko, s.pemilik, s.telp, s.whatsapp, s.facebook, s.tokopedia, s.bukalapak, s.shopee, s.info]));
         if (data.keuangan) data.keuangan.forEach(k => db.run('INSERT INTO keuangan (id, tanggal, tipe, kode, deskripsi, jumlah) VALUES (?, ?, ?, ?, ?, ?)', [k.id, k.tanggal, k.tipe, k.kode, k.deskripsi, k.jumlah]));
         if (data.customers) data.customers.forEach(c => db.run('INSERT INTO customers (name) VALUES (?)', [c]));
-        if (data.services) data.services.forEach(s => db.run('INSERT INTO services (id, noUrut, tanggalMasuk, pemilik, noHp, jenis, merek, serialNumber, kelengkapan, keluhan, statusPengerjaan, statusPembayaran, biaya, catatanTeknisi) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', [s.id, s.noUrut, s.tanggalMasuk, s.pemilik, s.noHp || s.telp || '-', s.jenis, s.merek, s.serialNumber || '-', s.kelengkapan, s.keluhan, s.statusPengerjaan, s.statusPembayaran, s.biaya, s.catatanTeknisi]));
+        if (data.services) data.services.forEach(s => db.run('INSERT INTO services (id, noUrut, tanggalMasuk, pemilik, noHp, jenis, merek, serialNumber, kelengkapan, keluhan, statusPengerjaan, statusPembayaran, biaya, catatanTeknisi, tanggalAmbil, items, jasaPasang) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', [s.id, s.noUrut, s.tanggalMasuk, s.pemilik, s.noHp || s.telp || '-', s.jenis, s.merek, s.serialNumber || '-', s.kelengkapan, s.keluhan, s.statusPengerjaan, s.statusPembayaran, s.biaya, s.catatanTeknisi, s.tanggalAmbil || '', s.items || '[]', s.jasaPasang || 0]));
         
         db.run("COMMIT;");
         saveDb();
@@ -340,6 +340,15 @@ ipcMain.handle('db-call', async (event, { table, action, data, id }) => {
     console.error('Database Error:', error);
     throw error;
   }
+});
+
+ipcMain.handle('focus-window', (event) => {
+  const win = BrowserWindow.fromWebContents(event.sender);
+  if (win) {
+    win.blur();
+    win.focus();
+  }
+  return { success: true };
 });
 
 ipcMain.handle('backup-db', async (event) => {
@@ -404,8 +413,12 @@ ipcMain.handle('restore-db', async (event) => {
       return { success: false, error: 'File yang dipilih bukan database SQLite yang valid atau file rusak.' };
     }
 
-    // Write to the main dbPath
-    fs.writeFileSync(dbPath, filebuffer);
+    // Run migrations on the restored database
+    runMigrations(tempDb);
+
+    // Save the migrated buffer to disk
+    const data = tempDb.export();
+    fs.writeFileSync(dbPath, Buffer.from(data));
     
     // Replace the global db
     db = tempDb;

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { X, Printer, Monitor } from 'lucide-react';
 import { getSettings } from '../utils/storage';
 
@@ -85,7 +86,7 @@ export default function CetakNotaKosong({ onClose }) {
         }}
       >
         <img 
-          src="logo.png" 
+          src="logo_app.png" 
           alt="Watermark Logo" 
           style={{ 
             width: '180px', 
@@ -95,7 +96,7 @@ export default function CetakNotaKosong({ onClose }) {
             marginBottom: '4px'
           }} 
         />
-        <div style={{ fontSize: '4.5rem', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.12em', border: '3px dashed #000', borderRadius: '1rem', padding: '6px 24px', whiteSpace: 'nowrap', color: '#000' }}>
+        <div style={{ fontSize: '4.5rem', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.12em', whiteSpace: 'nowrap', color: '#000' }}>
           {profile.nama_singkat}
         </div>
       </div>
@@ -106,7 +107,7 @@ export default function CetakNotaKosong({ onClose }) {
         {/* Header / Kop */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '4px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <img src="logo.png" alt="Logo AGS" style={{ width: '84px', height: '84px', objectFit: 'contain', flexShrink: 0 }} />
+            <img src="logo_app.png" alt="Logo AGS" style={{ width: '84px', height: '84px', objectFit: 'contain', flexShrink: 0 }} />
             <div>
               <div style={{ fontWeight: 900, fontSize: '18px', color: '#dc2626', textTransform: 'uppercase', letterSpacing: '0.05em', lineHeight: 1 }}>{profile.nama_singkat}</div>
               <div style={{ fontSize: '11px', fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.08em' }}>{profile.nama_bengkel}</div>
@@ -263,7 +264,7 @@ export default function CetakNotaKosong({ onClose }) {
     </>
   );
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 bg-slate-50 z-50 overflow-y-auto flex flex-col fade-in-up print-container">
       {/* Header Aksi */}
       <div className="bg-white border-b border-slate-200 p-4 flex flex-wrap justify-between items-center gap-4 no-print sticky top-0 z-10 shadow-sm">
@@ -373,6 +374,7 @@ export default function CetakNotaKosong({ onClose }) {
           @page { size: ${printMode === 'Thermal' ? '58mm auto' : 'A4 portrait'}; margin: 0 !important; }
         }
       `}} />
-    </div>
+    </div>,
+    document.body
   );
 }
